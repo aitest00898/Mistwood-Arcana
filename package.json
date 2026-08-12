@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "check": "npm run typecheck && npm run build",
     "prepare:hero16": "node scripts/prepare-hero-16.mjs",
+    "prepare:selection-art": "node scripts/prepare-selection-art.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

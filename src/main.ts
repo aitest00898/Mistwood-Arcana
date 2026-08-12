@@ -6,7 +6,8 @@ import { drawEnemy, drawOrb, drawOrbitalRing, drawParticle, drawPickup, drawPlay
 import { InputManager } from './input';
 import { direction16FromVector } from './directions';
 import { applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
-import type { DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, PerformanceSnapshot, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
+import { ATTACK_DEFINITIONS, AttackSystem } from './attacks';
+import type { AttackId, DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, PerformanceSnapshot, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
 import { GameUI } from './ui';
 import { World } from './world';
 import { clamp, distSq, hexToRgba, lerp, normalize, randomRange, seededRandom } from './utils';
@@ -20,6 +21,7 @@ class MistwoodGame {
   private readonly audio: AudioEngine;
   private readonly ui: GameUI;
   private readonly assets: ArtAssets;
+  private readonly attackSystem: AttackSystem;
   private player: Player;
   private stats: Stats;
   private state: GameState = 'CHARACTER_SELECT';
@@ -70,6 +72,7 @@ class MistwoodGame {
     this.input = new InputManager(canvas);
     this.audio = new AudioEngine();
     this.assets = new ArtAssets();
+    this.attackSystem = new AttackSystem();
     if (this.perfEnabled) {
       const element = document.getElementById('mistwood-perf-output');
       if (element) {
@@ -129,6 +132,7 @@ class MistwoodGame {
     this.nextEnemyId = 1;
     this.orbPositions = [];
     this.orbPositionsElapsed = -1;
+    this.attackSystem.reset(this.player);
     this.camera = { x: this.player.x - GAME_WIDTH / 2, y: this.player.y - GAME_HEIGHT / 2 };
     for (let i = 0; i < 10; i += 1) this.spawnEnemy(true);
     if (this.perfStress) this.setupPerformanceScenario();
@@ -164,6 +168,8 @@ class MistwoodGame {
     this.stats.chainCount = 7;
     this.stats.chainRange = 250;
     this.stats.baseDamage = 0.18;
+    this.stats.ownedAttacks = ['lightning', 'eclipseArc', 'astralLance', 'gravityWell', 'starfeatherFamiliar', 'crownOfBlades', 'celestialFall', 'moonreturnChakram'];
+    this.stats.attackRanks = Object.fromEntries(this.stats.ownedAttacks.map((id) => [id, 4]));
     this.enemies = [];
     this.nextEnemyId = 1;
     for (let i = 0; i < MAX_ENEMIES; i += 1) {
@@ -192,6 +198,7 @@ class MistwoodGame {
     // selector, so no low-resolution character can appear mid-transition.
     if (!this.assets.isReady) return;
     this.audio.startMusic();
+    this.audio.setMode('gameplay');
     this.reset();
   };
 
@@ -200,6 +207,8 @@ class MistwoodGame {
     this.selectedHeroIndex = index;
     this.player.heroId = HEROES[index].id;
     this.ui.setHoveredHero(index);
+    this.audio.heroSelect(index);
+    this.audio.setMode('menu');
     this.audio.startMusic();
   };
 
@@ -226,10 +235,13 @@ class MistwoodGame {
     this.canvas.height = Math.floor(drawHeight * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = true;
-    const visibleWidth = viewportWidth / scale;
-    const visibleHeight = viewportHeight / scale;
-    const cropLeft = Math.max(0, (GAME_WIDTH - visibleWidth) / 2);
-    const cropTop = Math.max(0, (GAME_HEIGHT - visibleHeight) / 2);
+    // The canvas is intentionally allowed to overscan on tall phones. Keep
+    // the visible rect aligned with the actual CSS canvas bounds; otherwise
+    // pointer coordinates and overlay layout disagree by the crop offset.
+    const visibleWidth = Math.min(GAME_WIDTH, viewportWidth / scale);
+    const visibleHeight = Math.min(GAME_HEIGHT, viewportHeight / scale);
+    const cropLeft = Math.max(0, -((viewportWidth - drawWidth) / 2) / scale);
+    const cropTop = Math.max(0, -((viewportHeight - drawHeight) / 2) / scale);
     this.ui.setViewport(cropLeft, Math.min(GAME_WIDTH, cropLeft + visibleWidth), cropTop, Math.min(GAME_HEIGHT, cropTop + visibleHeight));
   };
 
@@ -306,6 +318,12 @@ class MistwoodGame {
     }
     this.updateEnemies(dt);
     if (this.state !== 'PLAYING') return;
+    this.audio.setCombatIntensity(Math.min(1, this.enemies.length / Math.max(1, this.enemyCap())));
+    this.attackSystem.update(dt, this.elapsed * 1000, this.player, this.stats, this.enemies, {
+      damage: (enemy, multiplier, color) => this.damageEnemy(enemy, multiplier, color),
+      burst: (x, y, color, amount, type) => this.spawnBurst(x, y, color, amount, type),
+      sound: (id, intensity) => this.audio.attack(id, intensity),
+    });
     this.attackTimer -= dt;
     if (this.attackTimer <= 0) {
       this.castChains();
@@ -390,13 +408,18 @@ class MistwoodGame {
       enemy.y = next.y;
       const playerDistance = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
       if (playerDistance < this.player.radius + enemy.radius - 4 && enemy.contactCooldown <= 0 && this.player.invulnerable <= 0) {
-        const damage = (6 + Math.min(10, this.elapsed * 0.05)) * (1 - this.stats.damageReduction);
+        const damage = (6 + Math.min(10, this.elapsed * 0.05)) * (1 - this.attackSystem.getDamageReduction(this.stats));
         this.player.hp = Math.max(0, this.player.hp - damage);
         this.player.invulnerable = 0.65;
         this.player.hitFlash = 0.32;
         enemy.contactCooldown = 0.72;
         this.audio.hurt();
         this.spawnBurst(this.player.x, this.player.y, '#ff8e7d', 7, 'spark');
+        this.attackSystem.notifyPlayerHit(this.player, this.stats, this.enemies, {
+          damage: (target, multiplier, color) => this.damageEnemy(target, multiplier, color),
+          burst: (x, y, color, amount, type) => this.spawnBurst(x, y, color, amount, type),
+          sound: (id, intensity) => this.audio.attack(id, intensity),
+        });
         if (this.player.hp <= 0) {
           this.state = 'GAME_OVER';
           this.audio.death();
@@ -514,10 +537,10 @@ class MistwoodGame {
     return closest;
   }
 
-  private damageEnemy(enemy: Enemy): void {
+  private damageEnemy(enemy: Enemy, multiplier?: number, effectColor?: string): void {
     const critical = Math.random() < this.stats.critRate;
     const variance = 0.92 + Math.random() * 0.18;
-    const damage = this.stats.baseDamage * this.stats.orbDamageMultiplier * variance * (critical ? this.stats.critMultiplier : 1);
+    const damage = this.stats.baseDamage * (multiplier ?? this.stats.orbDamageMultiplier) * variance * (critical ? this.stats.critMultiplier : 1);
     enemy.hp -= damage;
     enemy.hitFlash = 0.28;
     enemy.hitStun = 0.11;
@@ -525,8 +548,8 @@ class MistwoodGame {
       enemy.dotTimer = Math.max(enemy.dotTimer, this.stats.dotDuration);
       enemy.dotTick = Math.min(enemy.dotTick <= 0 ? 0.16 : enemy.dotTick, 0.16);
     }
-    this.addDamageText(enemy.x + randomRange(-5, 5), enemy.y - enemy.radius - 6, damage, critical, critical ? '#ffe78e' : '#f6ffff');
-    this.spawnBurst(enemy.x, enemy.y, critical ? '#fff2a6' : '#9befff', critical ? 9 : 5, 'spark');
+    this.addDamageText(enemy.x + randomRange(-5, 5), enemy.y - enemy.radius - 6, damage, critical, critical ? '#ffe78e' : effectColor ?? '#f6ffff');
+    this.spawnBurst(enemy.x, enemy.y, critical ? '#fff2a6' : effectColor ?? '#9befff', critical ? 9 : 5, 'spark');
     if (Math.random() < 0.38) this.audio.hit(critical);
     if (enemy.hp <= 0) this.killEnemy(enemy);
   }
@@ -694,7 +717,13 @@ class MistwoodGame {
     } else if (key === 'h') this.player.hp = this.player.maxHp + this.stats.maxHpBonus;
     else if (key === 'e') for (let i = 0; i < 8; i += 1) this.spawnEnemy(false);
     else if (key === 'x') ENEMIES.forEach((definition) => this.spawnEnemy(false, definition.id, 165));
-    else if (key === 'k') this.state = 'GAME_OVER';
+    else if (key === 'u') {
+      this.stats.ownedAttacks = ['lightning', 'eclipseArc', 'astralLance', 'sanctumThorns', 'gravityWell', 'starfeatherFamiliar', 'crownOfBlades', 'thornJavelin'];
+      this.stats.attackRanks = Object.fromEntries(this.stats.ownedAttacks.map((id) => [id, 4]));
+    } else if (key === 'i') {
+      this.stats.ownedAttacks = ['lightning', ...ATTACK_DEFINITIONS.map((definition) => definition.id).slice(0, 7)];
+      this.stats.attackRanks = Object.fromEntries(this.stats.ownedAttacks.map((id) => [id, 5]));
+    } else if (key === 'k') this.state = 'GAME_OVER';
   }
 
   private render(timestamp: number): void {
@@ -716,6 +745,7 @@ class MistwoodGame {
       if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
       for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
       for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time, this.assets);
+      this.attackSystem.draw(ctx, this.player, this.stats, time);
       const orbs = this.getOrbPositions();
       drawOrbitalRing(ctx, this.player.x, this.player.y - 25, 76, 45, time);
       for (const orb of orbs) if (orb.y < this.player.y - 20) drawOrb(ctx, orb, time);
@@ -731,6 +761,22 @@ class MistwoodGame {
     if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady);
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);
     if (this.state === 'GAME_OVER') this.ui.drawGameOver(ctx, this.player, this.elapsed);
+    if (this.debug) {
+      const debugWindow = window as Window & { __mistwoodDebug?: unknown };
+      debugWindow.__mistwoodDebug = {
+        state: this.state,
+        hero: this.player.heroId,
+        selectedHeroIndex: this.selectedHeroIndex,
+        level: this.player.level,
+        ownedAttacks: [...this.stats.ownedAttacks],
+        attackRanks: { ...this.stats.attackRanks },
+        cards: this.cards.map((card) => ({ id: card.id, kind: card.kind, attackId: card.attackId, skillId: card.skillId, title: card.title, rarity: card.rarity })),
+        allAttackIds: ATTACK_DEFINITIONS.map((definition) => definition.id as AttackId),
+        viewport: this.ui.getVisibleRect(),
+        loading: this.assets.loadingState,
+        muted: this.audio.isMuted,
+      };
+    }
     if (this.perfEnabled && this.perfFrameCount > 0 && this.perfFrameCount % 30 === 0) {
       this.perfMaxEnemies = Math.max(this.perfMaxEnemies, this.enemies.length);
       this.perfMaxParticles = Math.max(this.perfMaxParticles, this.particles.length);

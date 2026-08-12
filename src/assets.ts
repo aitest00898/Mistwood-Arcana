@@ -12,6 +12,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '閃電 · 以太 · 軌道魔法',
     palette: ['#172d63', '#f7f2df', '#bd9250', '#43e8ff'],
     masterArt: 'characters/aether-mage-master.png',
+    selectionArt: 'characters/selection/aether-mage.png',
     directionalAtlas: 'characters/aether-mage/directional-atlas.png',
     spriteIndex: 0,
   },
@@ -24,6 +25,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '祝福 · 輻光 · 聖擊',
     palette: ['#f7f3e4', '#6b84c7', '#c9a150', '#8ce9ff'],
     masterArt: 'characters/holy-spellblade-master.png',
+    selectionArt: 'characters/selection/holy-spellblade.png',
     directionalAtlas: 'characters/holy-spellblade/directional-atlas.png',
     spriteIndex: 1,
   },
@@ -36,6 +38,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '森靈 · 旋風 · 幽霧',
     palette: ['#1e493b', '#282923', '#8b6942', '#88c9a0'],
     masterArt: 'characters/mistwood-ranger-master.png',
+    selectionArt: 'characters/selection/mistwood-ranger.png',
     directionalAtlas: 'characters/mistwood-ranger/directional-atlas.png',
     spriteIndex: 2,
   },
@@ -76,7 +79,8 @@ export class ArtAssets {
   readonly ready: Promise<void>;
   private enemyAtlas: HTMLImageElement | null = null;
   private readonly directionalAtlases = new Map<HeroId, HTMLImageElement>();
-  private readonly loadingTotal = HEROES.length + 1;
+  private readonly selectionArts = new Map<HeroId, HTMLImageElement>();
+  private readonly loadingTotal = HEROES.length * 2 + 1;
   private loadingFinished = 0;
   private loadingFailures = 0;
   private loadingComplete = false;
@@ -90,11 +94,14 @@ export class ArtAssets {
     this.ready = Promise.all([
       track('enemies/enemy-atlas.png'),
       ...HEROES.map((hero) => track(hero.directionalAtlas)),
+      ...HEROES.map((hero) => track(hero.selectionArt)),
     ]).then((images) => {
       this.enemyAtlas = images[0];
       HEROES.forEach((hero, index) => {
         const directionalAtlas = images[1 + index];
         if (directionalAtlas) this.directionalAtlases.set(hero.id, directionalAtlas);
+        const selectionArt = images[1 + HEROES.length + index];
+        if (selectionArt) this.selectionArts.set(hero.id, selectionArt);
       });
     }).finally(() => {
       this.loadingComplete = true;
@@ -102,7 +109,7 @@ export class ArtAssets {
   }
 
   get isReady(): boolean {
-    return Boolean(this.enemyAtlas && this.directionalAtlases.size === HEROES.length);
+    return Boolean(this.enemyAtlas && this.directionalAtlases.size === HEROES.length && this.selectionArts.size === HEROES.length);
   }
 
   get loadingState(): { loaded: number; total: number; failed: number; complete: boolean; ready: boolean } {
@@ -116,7 +123,11 @@ export class ArtAssets {
   }
 
   isHeroReady(hero: HeroDefinition): boolean {
-    return Boolean(this.directionalAtlases.get(hero.id));
+    return Boolean(this.directionalAtlases.get(hero.id) && this.selectionArts.get(hero.id));
+  }
+
+  isSelectionReady(hero: HeroDefinition): boolean {
+    return Boolean(this.selectionArts.get(hero.id));
   }
 
   drawHeroSprite(ctx: CanvasRenderingContext2D, hero: HeroDefinition, player: Player, time: number): void {
@@ -168,24 +179,22 @@ export class ArtAssets {
   }
 
   drawHeroPreview(ctx: CanvasRenderingContext2D, hero: HeroDefinition, x: number, y: number, width: number, height: number, alpha = 1): boolean {
-    const directionalAtlas = this.directionalAtlases.get(hero.id);
+    const selectionArt = this.selectionArts.get(hero.id);
     ctx.save();
     ctx.globalAlpha = alpha;
-    if (!directionalAtlas) {
+    if (!selectionArt) {
       ctx.restore();
       return false;
     }
-    const cellWidth = directionalAtlas.width / 4;
-    const cellHeight = directionalAtlas.height / 4;
-    const ratio = Math.min(width / cellWidth, height / cellHeight);
-    const drawWidth = cellWidth * ratio;
-    const drawHeight = cellHeight * ratio;
+    const ratio = Math.min(width / selectionArt.width, height / selectionArt.height);
+    const drawWidth = selectionArt.width * ratio;
+    const drawHeight = selectionArt.height * ratio;
     ctx.drawImage(
-      directionalAtlas,
+      selectionArt,
       0,
       0,
-      cellWidth,
-      cellHeight,
+      selectionArt.width,
+      selectionArt.height,
       x - drawWidth / 2,
       y - drawHeight / 2,
       drawWidth,

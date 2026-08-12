@@ -1,5 +1,6 @@
 import { RARITY_COLORS } from './config';
-import type { Rarity, SkillId, Stats, UpgradeCard } from './types';
+import { ATTACK_DEFINITIONS, attackDefinition } from './attacks';
+import type { AttackId, Rarity, SkillId, Stats, UpgradeCard } from './types';
 
 export interface SkillDefinition {
   id: SkillId;
@@ -48,6 +49,8 @@ export const initialStats = (): Stats => ({
     embrace: 0,
     blade: 0,
   },
+  ownedAttacks: ['lightning'],
+  attackRanks: { lightning: 1 },
 });
 
 const valueFor = (id: SkillId, level: number): string => {
@@ -69,48 +72,96 @@ const pickRarity = (level: number): Rarity => {
 };
 
 export const rollUpgradeCards = (stats: Stats): UpgradeCard[] => {
-  const shuffled = [...SKILLS].sort(() => Math.random() - 0.5);
-  if (stats.skillLevels.lightning === 0) {
-    const lightning = SKILLS.find((skill) => skill.id === 'lightning');
-    if (lightning) {
-      const rest = shuffled.filter((skill) => skill.id !== 'lightning').slice(0, 2);
-      shuffled.splice(0, shuffled.length, lightning, ...rest);
+  const candidates: UpgradeCard[] = [];
+  const owned = new Set(stats.ownedAttacks);
+  if (stats.ownedAttacks.length < 8) {
+    for (const attack of ATTACK_DEFINITIONS) {
+      if (owned.has(attack.id)) continue;
+      const rarity = pickRarity(1);
+      candidates.push({
+        id: attack.id,
+        kind: 'attack-unlock',
+        attackId: attack.id,
+        rarity,
+        level: 1,
+        title: attack.name,
+        description: attack.description,
+        value: '獲得新攻擊',
+        accent: rarityColor(rarity),
+      });
     }
   }
-  return shuffled.slice(0, 3).map((skill, index) => {
+  for (const attackId of stats.ownedAttacks) {
+    if (attackId === 'lightning') {
+      const level = (stats.attackRanks.lightning ?? 1) + 1;
+      const rarity = pickRarity(level);
+      candidates.push({ id: 'lightning', kind: 'attack-upgrade', attackId: 'lightning', rarity, level, title: '閃電球', description: '球體釋放閃電鏈造成', value: `${370 + Math.max(0, level - 1) * 55}% 傷害`, accent: rarityColor(rarity) });
+    } else {
+      const attack = attackDefinition(attackId);
+      if (!attack) continue;
+      const level = (stats.attackRanks[attackId] ?? 1) + 1;
+      const rarity = pickRarity(level);
+      candidates.push({ id: attackId, kind: 'attack-upgrade', attackId, rarity, level, title: attack.name, description: attack.upgradeDescription(level), value: attack.upgradeValue(level), accent: rarityColor(rarity) });
+    }
+  }
+  for (const skill of SKILLS.filter((skill) => skill.id !== 'lightning')) {
     const level = stats.skillLevels[skill.id] + 1;
-    const rarity = index === 0 && stats.skillLevels.lightning === 0 ? '罕見!' : pickRarity(level);
-    return {
-      id: skill.id,
-      rarity,
-      level,
-      title: skill.title,
-      description: skill.description,
-      value: valueFor(skill.id, level),
-      accent: rarityColor(rarity),
-    };
-  });
+    const rarity = pickRarity(level);
+    candidates.push({ id: skill.id, kind: 'passive', skillId: skill.id, rarity, level, title: skill.title, description: skill.description, value: valueFor(skill.id, level), accent: rarityColor(rarity) });
+  }
+  const unique = [...candidates].sort(() => Math.random() - 0.5);
+  const selected: UpgradeCard[] = [];
+  const kinds: UpgradeCard['kind'][] = ['attack-unlock', 'attack-upgrade', 'passive'];
+  for (const kind of kinds) {
+    const candidate = unique.find((item) => item.kind === kind && !selected.some((choice) => choice.id === item.id));
+    if (candidate) selected.push(candidate);
+  }
+  for (const candidate of unique) {
+    if (selected.length >= 3) break;
+    if (!selected.some((choice) => choice.id === candidate.id)) selected.push(candidate);
+  }
+  return selected.slice(0, 3);
 };
 
 export const applyUpgrade = (stats: Stats, card: UpgradeCard): void => {
-  stats.skillLevels[card.id] += 1;
-  const level = stats.skillLevels[card.id];
+  if (card.kind === 'attack-unlock' && card.attackId && !stats.ownedAttacks.includes(card.attackId) && stats.ownedAttacks.length < 8) {
+    stats.ownedAttacks.push(card.attackId);
+    stats.attackRanks[card.attackId] = 1;
+    return;
+  }
+  if (card.kind === 'attack-upgrade' && card.attackId) {
+    const level = (stats.attackRanks[card.attackId] ?? 1) + 1;
+    stats.attackRanks[card.attackId] = level;
+    if (card.attackId === 'lightning') {
+      const rarityBoost = card.rarity === '傳說!!!' ? 1.55 : card.rarity === '史詩!!' ? 1.3 : card.rarity === '罕見!' ? 1.12 : card.rarity === '普通' ? 1 : 0.82;
+      stats.orbDamageMultiplier += 0.34 * rarityBoost;
+      stats.chainCount += level % 2 === 0 ? 1 : 0;
+      stats.chainRange += 10 * rarityBoost;
+      stats.attackInterval = Math.max(0.42, stats.attackInterval - 0.06 * rarityBoost);
+      if (level === 2 || (level > 2 && level % 3 === 0)) stats.orbCount = Math.min(5, stats.orbCount + 1);
+    }
+    return;
+  }
+  const skillId = card.skillId ?? (card.id as SkillId);
+  if (!SKILLS.some((skill) => skill.id === skillId)) return;
+  stats.skillLevels[skillId] += 1;
+  const level = stats.skillLevels[skillId];
   const rarityBoost = card.rarity === '傳說!!!' ? 1.55 : card.rarity === '史詩!!' ? 1.3 : card.rarity === '罕見!' ? 1.12 : card.rarity === '普通' ? 1 : 0.82;
-  if (card.id === 'lightning') {
+  if (skillId === 'lightning') {
     stats.orbDamageMultiplier += 0.34 * rarityBoost;
     stats.chainCount += level % 2 === 0 ? 1 : 0;
     stats.chainRange += 10 * rarityBoost;
     stats.attackInterval = Math.max(0.42, stats.attackInterval - 0.06 * rarityBoost);
     if (level === 2 || (level > 2 && level % 3 === 0)) stats.orbCount = Math.min(5, stats.orbCount + 1);
-  } else if (card.id === 'blessing') {
+  } else if (skillId === 'blessing') {
     stats.critRate = Math.min(0.6, stats.critRate + 0.065 * rarityBoost);
-  } else if (card.id === 'ray') {
+  } else if (skillId === 'ray') {
     stats.baseDamage += 1.55 * rarityBoost;
     stats.attackRadius += 15 * rarityBoost;
-  } else if (card.id === 'vortex') {
+  } else if (skillId === 'vortex') {
     stats.dotDuration += 1.2 * rarityBoost;
     stats.dotDamage += 1.8 * rarityBoost;
-  } else if (card.id === 'embrace') {
+  } else if (skillId === 'embrace') {
     stats.orbDamageMultiplier += 0.22 * rarityBoost;
     stats.moveSpeedMultiplier += 0.025;
   } else if (card.id === 'blade') {

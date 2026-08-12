@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v10-visible-loader';
+const CACHE_NAME = 'mistwood-arcana-shell-v11-combat-expansion';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,
@@ -10,6 +10,9 @@ const APP_SHELL = [
   new URL('assets/characters/aether-mage/directional-atlas.png', APP_BASE).href,
   new URL('assets/characters/holy-spellblade/directional-atlas.png', APP_BASE).href,
   new URL('assets/characters/mistwood-ranger/directional-atlas.png', APP_BASE).href,
+  new URL('assets/characters/selection/aether-mage.png', APP_BASE).href,
+  new URL('assets/characters/selection/holy-spellblade.png', APP_BASE).href,
+  new URL('assets/characters/selection/mistwood-ranger.png', APP_BASE).href,
   new URL('assets/enemies/enemy-atlas.png', APP_BASE).href,
 ];
 

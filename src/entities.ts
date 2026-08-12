@@ -370,6 +370,148 @@ export const drawSkillGlyph = (ctx: CanvasRenderingContext2D, id: string, size: 
     ctx.beginPath();
     ctx.arc(0, size * 0.17, size * 0.16, 0, Math.PI * 2);
     ctx.fill();
+  } else if (id === 'eclipseArc') {
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.65, -Math.PI * 0.75, Math.PI * 0.75);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.32, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (id === 'astralLance') {
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.8, size * 0.5);
+    ctx.lineTo(size * 0.78, -size * 0.5);
+    ctx.lineTo(size * 0.33, -size * 0.06);
+    ctx.lineTo(size * 0.78, size * 0.15);
+    ctx.stroke();
+  } else if (id === 'sanctumThorns') {
+    polygonPath(ctx, 8, size * 0.68);
+    ctx.stroke();
+    for (let i = 0; i < 4; i += 1) {
+      const angle = i * Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * size * 0.18, Math.sin(angle) * size * 0.18);
+      ctx.lineTo(Math.cos(angle) * size * 0.78, Math.sin(angle) * size * 0.78);
+      ctx.stroke();
+    }
+  } else if (id === 'gravityWell') {
+    for (let ring = 0; ring < 2; ring += 1) {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * (0.35 + ring * 0.28), size * (0.2 + ring * 0.22), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === 'starfeatherFamiliar') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.72);
+    ctx.lineTo(size * 0.72, size * 0.45);
+    ctx.lineTo(0, size * 0.2);
+    ctx.lineTo(-size * 0.72, size * 0.45);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.1, size * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === 'crownOfBlades') {
+    polygonPath(ctx, 6, size * 0.7);
+    ctx.stroke();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = i * Math.PI / 3;
+      ctx.moveTo(Math.cos(angle) * size * 0.25, Math.sin(angle) * size * 0.25);
+      ctx.lineTo(Math.cos(angle) * size * 0.82, Math.sin(angle) * size * 0.82);
+    }
+    ctx.stroke();
+  } else if (id === 'thornJavelin') {
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.78, size * 0.44);
+    ctx.lineTo(size * 0.78, -size * 0.44);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.78, -size * 0.44);
+    ctx.lineTo(size * 0.38, -size * 0.5);
+    ctx.lineTo(size * 0.52, -size * 0.08);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (id === 'ricochetStar') {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i += 1) {
+      const angle = -Math.PI / 2 + i * Math.PI / 4;
+      const radius = i % 2 === 0 ? size * 0.78 : size * 0.28;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if (id === 'prismRefraction') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.78);
+    ctx.lineTo(size * 0.62, size * 0.5);
+    ctx.lineTo(-size * 0.62, size * 0.5);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.8, 0);
+    ctx.lineTo(size * 0.8, 0);
+    ctx.stroke();
+  } else if (id === 'galeReaper') {
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.7, -Math.PI * 0.75, Math.PI * 0.3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.42, Math.PI * 0.25, Math.PI * 1.2);
+    ctx.stroke();
+  } else if (id === 'celestialFall') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.82);
+    ctx.lineTo(size * 0.16, -size * 0.12);
+    ctx.lineTo(size * 0.56, 0);
+    ctx.lineTo(size * 0.12, size * 0.15);
+    ctx.lineTo(0, size * 0.8);
+    ctx.lineTo(-size * 0.12, size * 0.15);
+    ctx.lineTo(-size * 0.56, 0);
+    ctx.lineTo(-size * 0.16, -size * 0.12);
+    ctx.closePath();
+    ctx.stroke();
+  } else if (id === 'echoShade') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.72);
+    ctx.quadraticCurveTo(size * 0.7, -size * 0.2, size * 0.42, size * 0.58);
+    ctx.quadraticCurveTo(0, size * 0.78, -size * 0.42, size * 0.58);
+    ctx.quadraticCurveTo(-size * 0.7, -size * 0.2, 0, -size * 0.72);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.15, size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (id === 'mirrorTwin') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.8);
+    ctx.lineTo(size * 0.6, 0);
+    ctx.lineTo(0, size * 0.8);
+    ctx.lineTo(-size * 0.6, 0);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.8, 0);
+    ctx.lineTo(size * 0.8, 0);
+    ctx.stroke();
+  } else if (id === 'mistwoodRuneMine') {
+    polygonPath(ctx, 6, size * 0.67);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.4, size * 0.15);
+    ctx.lineTo(0, -size * 0.5);
+    ctx.lineTo(size * 0.4, size * 0.15);
+    ctx.stroke();
+  } else if (id === 'moonreturnChakram') {
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.62, -Math.PI * 0.85, Math.PI * 0.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+    ctx.stroke();
   } else {
     ctx.beginPath();
     ctx.moveTo(-size * 0.2, size * 0.75);

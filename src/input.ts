@@ -88,7 +88,7 @@ export class InputManager {
 
   private handleKeyDown = (event: KeyboardEvent): void => {
     const key = event.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter', '1', '2', '3', 'l', 'h', 'e', 'x', 'k', 'r'].includes(key)) {
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter', '1', '2', '3', 'l', 'h', 'e', 'x', 'u', 'i', 'k', 'r'].includes(key)) {
       event.preventDefault();
     }
     this.keys.add(key);

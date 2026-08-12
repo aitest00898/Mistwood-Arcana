@@ -19,6 +19,24 @@ export type EnemyKind =
   | 'ancientGroveGuardian';
 export type PickupColor = 'cyan' | 'green' | 'yellow' | 'red';
 export type SkillId = 'lightning' | 'blessing' | 'ray' | 'vortex' | 'embrace' | 'blade';
+export type AttackId =
+  | 'lightning'
+  | 'eclipseArc'
+  | 'astralLance'
+  | 'sanctumThorns'
+  | 'gravityWell'
+  | 'starfeatherFamiliar'
+  | 'crownOfBlades'
+  | 'thornJavelin'
+  | 'ricochetStar'
+  | 'prismRefraction'
+  | 'galeReaper'
+  | 'celestialFall'
+  | 'echoShade'
+  | 'mirrorTwin'
+  | 'mistwoodRuneMine'
+  | 'moonreturnChakram';
+export type AttackCategory = 'melee' | 'projectile' | 'field' | 'orbital' | 'summon' | 'beam' | 'trap' | 'sky';
 export type Rarity = '垃圾' | '普通' | '罕見!' | '史詩!!' | '傳說!!!';
 
 export interface Vec2 {
@@ -64,6 +82,8 @@ export interface Stats {
   dotDamage: number;
   damageReduction: number;
   skillLevels: Record<SkillId, number>;
+  ownedAttacks: AttackId[];
+  attackRanks: Partial<Record<AttackId, number>>;
 }
 
 export interface Enemy {
@@ -95,6 +115,7 @@ export interface HeroDefinition {
   magicTheme: string;
   palette: string[];
   masterArt: string;
+  selectionArt: string;
   directionalAtlas: string;
   spriteIndex: number;
 }
@@ -231,11 +252,14 @@ export interface TreeDetail {
 }
 
 export interface UpgradeCard {
-  id: SkillId;
+  id: SkillId | AttackId;
+  kind: 'attack-unlock' | 'attack-upgrade' | 'passive';
   rarity: Rarity;
   level: number;
   title: string;
   description: string;
   value: string;
   accent: string;
+  attackId?: AttackId;
+  skillId?: SkillId;
 }

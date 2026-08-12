@@ -30,6 +30,19 @@
 - `enemies/lineup/`：15 種敵人概念陣列；`enemies/turnaround/`：15 種敵人的分批 turnarounds。
 - `enemies/gameplay/enemy-atlas.png`：15 種透明 gameplay sprite atlas（4×4，最後一格保留）。
 
+## Character selection art
+
+選角畫面與 gameplay 使用兩條不同的資產管線：
+
+- `characters/source/hero-selection-reference.jpg`：高解析三英雄選角原始板，保留作為可追溯的設計來源。
+- `public/assets/characters/selection/aether-mage.png`：艾爾登高解析選角圖。
+- `public/assets/characters/selection/holy-spellblade.png`：莉亞娜高解析選角圖。
+- `public/assets/characters/selection/mistwood-ranger.png`：薇爾娜高解析選角圖。
+
+選角圖由 `scripts/prepare-selection-art.mjs` 以固定裁切區域、白底連通區去背、邊緣去暈與透明裁切產生；選角畫面只在 preload 階段載入這三張圖，不會把低解析 16-direction tile 放大充當主視覺。重新處理資產時執行 `npm run prepare:selection-art`，並確認輸出仍為 RGBA PNG、角色四肢／武器未被裁切。
+
+新增英雄時，請同時加入 `src/types.ts` 的 `HeroDefinition.selectionArt`、`src/assets.ts` 的 preload 與 `public/sw.js` 的 cache 清單；gameplay atlas 與 selection art 不可互相替換。
+
 Runtime asset loader 位於 `src/assets.ts`。它只在載入時建立 `Image`，遊戲迴圈從 atlas 取樣；高解析 master 不會被每幀載入。若重新生成，必須維持 manifest 中的英雄順序、敵人 atlas 順序、透明去背驗證與 silhouette 規則。
 
 ## Raster / vector assets
