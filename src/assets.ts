@@ -76,22 +76,43 @@ export class ArtAssets {
   readonly ready: Promise<void>;
   private enemyAtlas: HTMLImageElement | null = null;
   private readonly directionalAtlases = new Map<HeroId, HTMLImageElement>();
+  private readonly loadingTotal = HEROES.length + 1;
+  private loadingFinished = 0;
+  private loadingFailures = 0;
+  private loadingComplete = false;
 
   constructor() {
+    const track = (src: string): Promise<HTMLImageElement | null> => loadImage(src).then((image) => {
+      this.loadingFinished += 1;
+      if (!image) this.loadingFailures += 1;
+      return image;
+    });
     this.ready = Promise.all([
-      loadImage('enemies/enemy-atlas.png'),
-      ...HEROES.map((hero) => loadImage(hero.directionalAtlas)),
+      track('enemies/enemy-atlas.png'),
+      ...HEROES.map((hero) => track(hero.directionalAtlas)),
     ]).then((images) => {
       this.enemyAtlas = images[0];
       HEROES.forEach((hero, index) => {
         const directionalAtlas = images[1 + index];
         if (directionalAtlas) this.directionalAtlases.set(hero.id, directionalAtlas);
       });
+    }).finally(() => {
+      this.loadingComplete = true;
     });
   }
 
   get isReady(): boolean {
     return Boolean(this.enemyAtlas && this.directionalAtlases.size === HEROES.length);
+  }
+
+  get loadingState(): { loaded: number; total: number; failed: number; complete: boolean; ready: boolean } {
+    return {
+      loaded: this.loadingFinished,
+      total: this.loadingTotal,
+      failed: this.loadingFailures,
+      complete: this.loadingComplete,
+      ready: this.isReady,
+    };
   }
 
   isHeroReady(hero: HeroDefinition): boolean {

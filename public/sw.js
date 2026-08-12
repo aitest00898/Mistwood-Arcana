@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v9-fullscreen-art';
+const CACHE_NAME = 'mistwood-arcana-shell-v10-visible-loader';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,

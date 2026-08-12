@@ -107,6 +107,10 @@ class MistwoodGame {
     return this.assets.ready;
   }
 
+  assetLoadingState(): { loaded: number; total: number; failed: number; complete: boolean; ready: boolean } {
+    return this.assets.loadingState;
+  }
+
   private reset = (): void => {
     this.state = 'PLAYING';
     this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, HEROES[this.selectedHeroIndex].id);
@@ -852,12 +856,40 @@ const drawFlash = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: 
 const canvas = document.getElementById('game-canvas');
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Game canvas was not found');
 const loading = document.getElementById('loading');
+const loadingTitle = document.getElementById('loading-title');
+const loadingDetail = document.getElementById('loading-detail');
+const loadingFill = document.getElementById('loading-progress-fill');
+const loadingReload = document.getElementById('loading-reload');
 const game = new MistwoodGame(canvas);
-if (loading) {
-  void game.assetReady().finally(() => {
-    loading.style.opacity = '0';
-    window.setTimeout(() => loading.remove(), 320);
-  });
-}
+const bootWindow = window as Window & { __mistwoodBootStarted?: boolean };
+bootWindow.__mistwoodBootStarted = true;
+const syncLoadingUi = (): void => {
+  if (!loading) return;
+  const state = game.assetLoadingState();
+  if (!state.complete) {
+    const percentage = Math.round((state.loaded / Math.max(1, state.total)) * 100);
+    if (loadingTitle) loadingTitle.textContent = '正在喚醒霧林…';
+    if (loadingDetail) loadingDetail.textContent = `正在載入遊戲素材 ${state.loaded} / ${state.total}（${percentage}%）`;
+    if (loadingFill) {
+      loadingFill.classList.remove('indeterminate');
+      loadingFill.style.width = `${Math.max(7, percentage)}%`;
+    }
+    window.requestAnimationFrame(syncLoadingUi);
+    return;
+  }
+  if (!state.ready || state.failed > 0) {
+    if (loadingTitle) loadingTitle.textContent = '霧林素材載入失敗';
+    if (loadingDetail) loadingDetail.textContent = `已完成 ${state.loaded} / ${state.total}，請檢查網路後重試`;
+    if (loadingFill) loadingFill.classList.add('indeterminate');
+    loadingReload?.classList.add('visible');
+    return;
+  }
+  if (loadingTitle) loadingTitle.textContent = '霧林已甦醒';
+  if (loadingDetail) loadingDetail.textContent = '正在進入角色選擇';
+  if (loadingFill) loadingFill.style.width = '100%';
+  loading.style.opacity = '0';
+  window.setTimeout(() => loading.remove(), 320);
+};
+syncLoadingUi();
 registerPwa();
 game.start();
