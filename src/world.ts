@@ -12,7 +12,7 @@ export class World {
   private atmosphereReady = false;
 
   constructor() {
-    this.atmosphere.src = '/assets/forest-atmosphere.png';
+    this.atmosphere.src = `${import.meta.env.BASE_URL}assets/forest-atmosphere.png`;
     this.atmosphere.onload = () => {
       this.atmosphereReady = true;
     };

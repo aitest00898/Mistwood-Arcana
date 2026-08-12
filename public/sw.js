@@ -1,11 +1,12 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v4';
+const CACHE_NAME = 'mistwood-arcana-shell-v5';
+const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
-  '/',
-  '/manifest.webmanifest',
-  '/pwa/icon.svg',
-  '/pwa/icon-192.png',
-  '/pwa/icon-512.png',
-  '/assets/forest-atmosphere.png',
+  APP_BASE,
+  new URL('manifest.webmanifest', APP_BASE).href,
+  new URL('pwa/icon.svg', APP_BASE).href,
+  new URL('pwa/icon-192.png', APP_BASE).href,
+  new URL('pwa/icon-512.png', APP_BASE).href,
+  new URL('assets/forest-atmosphere.png', APP_BASE).href,
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,7 +29,7 @@ self.addEventListener('fetch', (event) => {
         const copy = response.clone();
         void caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
-      }).catch(() => caches.match('/'));
+      }).catch(() => caches.match(APP_BASE));
     }),
   );
 });
