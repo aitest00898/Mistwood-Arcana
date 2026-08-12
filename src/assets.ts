@@ -68,10 +68,21 @@ const enemyMap = new Map(ENEMIES.map((enemy) => [enemy.id, enemy]));
 export const heroDefinition = (id: HeroId): HeroDefinition => heroMap.get(id) ?? HEROES[0];
 export const enemyDefinition = (id: EnemyKind): EnemyDefinition => enemyMap.get(id) ?? ENEMIES[0];
 
+const IMAGE_LOAD_TIMEOUT_MS = 15000;
+
 const loadImage = (src: string): Promise<HTMLImageElement | null> => new Promise((resolve) => {
   const image = new Image();
-  image.onload = () => resolve(image);
-  image.onerror = () => resolve(null);
+  let settled = false;
+  const finish = (loadedImage: HTMLImageElement | null): void => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timeout);
+    resolve(loadedImage);
+  };
+  const timeout = window.setTimeout(() => finish(null), IMAGE_LOAD_TIMEOUT_MS);
+  image.decoding = 'async';
+  image.onload = () => finish(image);
+  image.onerror = () => finish(null);
   image.src = `${import.meta.env.BASE_URL}assets/${src}`;
 });
 

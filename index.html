@@ -53,7 +53,20 @@
         var title = document.getElementById('loading-title');
         var detail = document.getElementById('loading-detail');
         var reload = document.getElementById('loading-reload');
-        if (reload) reload.addEventListener('click', function () { window.location.reload(); });
+        var showBootError = function () {
+          if (!title || !detail || !reload) return;
+          title.textContent = '霧林載入中斷';
+          detail.textContent = '連線或素材載入沒有完成，請重新整理再試一次';
+          reload.classList.add('visible');
+        };
+        var retry = function () {
+          var next = new URL(window.location.href);
+          next.searchParams.set('retry', String(Date.now()));
+          window.location.replace(next.toString());
+        };
+        if (reload) reload.addEventListener('click', retry);
+        window.addEventListener('error', showBootError);
+        window.addEventListener('unhandledrejection', showBootError);
         window.__mistwoodBootStarted = false;
         window.setTimeout(function () {
           if (window.__mistwoodBootStarted || !title || !detail || !reload) return;

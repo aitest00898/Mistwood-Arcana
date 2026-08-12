@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v11-combat-expansion';
+const CACHE_NAME = 'mistwood-arcana-shell-v12-boot-recovery';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,
@@ -17,17 +17,46 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => Promise.all(
+    APP_SHELL.map((url) => cache.add(url).catch(() => undefined)),
+  )).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))).then(() => self.clients.claim()),
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+      .then(async () => {
+        // If this worker replaces the stale worker in an installed PWA, reload
+        // an already-open Mistwood tab once so it immediately receives the new
+        // HTML and hashed bundle instead of remaining on the old boot screen.
+        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        await Promise.all(clients
+          .filter((client) => client.url.startsWith(APP_BASE))
+          .map((client) => client.navigate(client.url)));
+      }),
   );
 });
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
+  // HTML is the version boundary for the hashed JavaScript/CSS bundle. Always
+  // prefer the network for navigations so an installed PWA cannot keep an old
+  // boot screen after a Pages deployment. Offline fallback still uses the
+  // cached shell.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put(APP_BASE, copy));
+        }
+        return response;
+      }).catch(() => caches.match(APP_BASE)),
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
