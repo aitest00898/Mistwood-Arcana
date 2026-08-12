@@ -13,8 +13,8 @@
 
 `scripts/prepare-hero-16.mjs` 會去除連通的白色背景、裁切單一方向、統一落地錨點，
 並在每位英雄的 `runtime/` 產生 16 張獨立 PNG 與 4×4 的
-`directional-atlas.png` 會保留在來源／再生成目錄；瀏覽器載入壓縮後的
-`public/assets/characters/<hero>/directional-atlas.webp`，
+`directional-atlas-hd.png` 會保留在來源／再生成目錄；瀏覽器載入壓縮後的
+`public/assets/characters/<hero>/directional-atlas-hd.webp`，
 不會在遊戲中直接載入整張概念板。
 
 方向槽位使用 `d00`–`d15`：`d00` 是朝向鏡頭／畫面下方，之後以順時針每 22.5° 遞增。
@@ -51,6 +51,7 @@ Runtime asset loader 位於 `src/assets.ts`。它只在載入時建立 `Image`�
 ## Raster / vector assets
 
 - `bitmaps/forest-atmosphere.png`：森林地表與光影氛圍背景來源；瀏覽器使用 `public/assets/forest-atmosphere.webp`。
+- `attacks/source/attack-atlas-hd.png`：15 種攻擊與閃電球的 4×4 原創高解析圖集；`scripts/prepare-hd-art.mjs` 會輸出 `attacks/runtime/attack-atlas.png` 與 `public/assets/attacks/attack-atlas.webp`。投射物、飛刃、魔鴉、殘像與符雷優先使用圖集，Canvas 幾何保留作為資產失敗時的 fallback。
 - `icons/icon.svg`：PWA 圖示向量原稿。
 - `icons/icon-192.svg`、`icons/icon-512.svg`：向量安裝圖示版本。
 - `icons/icon-192.png`、`icons/icon-512.png`：iOS / Android 安裝圖示。

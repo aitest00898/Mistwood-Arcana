@@ -1,4 +1,5 @@
 import type { AttackCategory, AttackId, Enemy, Particle, Player, Stats, Vec2 } from './types';
+import type { ArtAssets } from './assets';
 import { clamp, distSq, drawGlow, hexToRgba, lerp, normalize, polygonPath } from './utils';
 
 export interface AttackDefinition {
@@ -489,19 +490,19 @@ export class AttackSystem {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D, player: Player, stats: Stats, time: number): void {
+  draw(ctx: CanvasRenderingContext2D, player: Player, stats: Stats, time: number, assets?: ArtAssets): void {
     ctx.save();
-    for (const field of this.fields) this.drawField(ctx, field, player, time);
-    for (const mine of this.mines) this.drawMine(ctx, mine, time);
-    for (const familiar of this.familiars) this.drawFamiliar(ctx, familiar, time);
-    for (const clone of this.clones) this.drawClone(ctx, clone, time);
-    for (const projectile of this.projectiles) this.drawProjectile(ctx, projectile, time);
-    if (stats.ownedAttacks.includes('crownOfBlades')) this.drawBlades(ctx, player, this.rank(stats, 'crownOfBlades'), time);
+    for (const field of this.fields) this.drawField(ctx, field, player, time, assets);
+    for (const mine of this.mines) this.drawMine(ctx, mine, time, assets);
+    for (const familiar of this.familiars) this.drawFamiliar(ctx, familiar, time, assets);
+    for (const clone of this.clones) this.drawClone(ctx, clone, time, assets);
+    for (const projectile of this.projectiles) this.drawProjectile(ctx, projectile, time, assets);
+    if (stats.ownedAttacks.includes('crownOfBlades')) this.drawBlades(ctx, player, this.rank(stats, 'crownOfBlades'), time, assets);
     for (const pulse of this.pulses) this.drawPulse(ctx, pulse, time);
     ctx.restore();
   }
 
-  private drawField(ctx: CanvasRenderingContext2D, field: Field, player: Player, time: number): void {
+  private drawField(ctx: CanvasRenderingContext2D, field: Field, player: Player, time: number, assets?: ArtAssets): void {
     const alpha = clamp(field.life / field.maxLife, 0, 1);
     ctx.save();
     ctx.translate(field.x, field.y);
@@ -623,11 +624,15 @@ export class AttackSystem {
     ctx.restore();
   }
 
-  private drawMine(ctx: CanvasRenderingContext2D, mine: Mine, time: number): void {
+  private drawMine(ctx: CanvasRenderingContext2D, mine: Mine, time: number, assets?: ArtAssets): void {
     const pulse = 1 + Math.sin(time * 0.006 + mine.x) * 0.06;
     ctx.save();
     ctx.translate(mine.x, mine.y);
     ctx.globalCompositeOperation = 'lighter';
+    if (assets?.drawAttackIcon(ctx, 'mistwoodRuneMine', 0, 0, 46 * pulse, time * 0.001, 0.78)) {
+      ctx.restore();
+      return;
+    }
     drawGlow(ctx, 0, 0, 22 * pulse, '#8bdd86', 0.45);
     ctx.strokeStyle = '#c4eea2';
     ctx.lineWidth = 1.2;
@@ -644,10 +649,14 @@ export class AttackSystem {
     ctx.restore();
   }
 
-  private drawFamiliar(ctx: CanvasRenderingContext2D, familiar: Familiar, time: number): void {
+  private drawFamiliar(ctx: CanvasRenderingContext2D, familiar: Familiar, time: number, assets?: ArtAssets): void {
     ctx.save();
     ctx.translate(familiar.x, familiar.y + Math.sin(time * 0.004 + familiar.phase) * 4);
     ctx.globalCompositeOperation = 'lighter';
+    if (assets?.drawAttackIcon(ctx, 'starfeatherFamiliar', 0, 0, 48, familiar.phase * 0.15, 0.86)) {
+      ctx.restore();
+      return;
+    }
     drawGlow(ctx, 0, 0, 22, '#9f8aff', 0.6);
     ctx.fillStyle = '#cfbcff';
     ctx.strokeStyle = '#33275e';
@@ -665,12 +674,16 @@ export class AttackSystem {
     ctx.restore();
   }
 
-  private drawClone(ctx: CanvasRenderingContext2D, clone: Clone, time: number): void {
+  private drawClone(ctx: CanvasRenderingContext2D, clone: Clone, time: number, assets?: ArtAssets): void {
     const alpha = clamp(clone.life / 1.3, 0, 0.52);
     ctx.save();
     ctx.translate(clone.x, clone.y + Math.sin(time * 0.003 + clone.phase) * 3);
     ctx.globalAlpha = alpha;
     ctx.globalCompositeOperation = 'lighter';
+    if (assets?.drawAttackIcon(ctx, 'echoShade', 0, 0, 60, clone.phase * 0.12, 0.52 * alpha)) {
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = '#bde1e2';
     ctx.strokeStyle = '#d4ffff';
     ctx.lineWidth = 1.5;
@@ -684,12 +697,22 @@ export class AttackSystem {
     ctx.restore();
   }
 
-  private drawProjectile(ctx: CanvasRenderingContext2D, projectile: Projectile, time: number): void {
-    ctx.save();
-    ctx.translate(projectile.x, projectile.y);
+  private drawProjectile(ctx: CanvasRenderingContext2D, projectile: Projectile, time: number, assets?: ArtAssets): void {
+    const attackId = projectile.kind === 'lance'
+      ? 'astralLance'
+      : projectile.kind === 'javelin'
+        ? 'thornJavelin'
+        : projectile.kind === 'star'
+          ? 'ricochetStar'
+          : 'moonreturnChakram';
     const directionX = projectile.kind === 'chakram' ? projectile.dirX ?? 1 : projectile.kind === 'javelin' ? (projectile.targetX ?? projectile.x) - projectile.x : projectile.vx;
     const directionY = projectile.kind === 'chakram' ? projectile.dirY ?? 0 : projectile.kind === 'javelin' ? (projectile.targetY ?? projectile.y) - projectile.y : projectile.vy;
-    ctx.rotate(Math.atan2(directionY, directionX) + (projectile.kind === 'chakram' ? time * 0.012 : 0));
+    const rotation = Math.atan2(directionY, directionX) + (projectile.kind === 'chakram' ? time * 0.012 : 0);
+    const size = projectile.kind === 'lance' ? 72 : projectile.kind === 'javelin' ? 60 : projectile.kind === 'chakram' ? 64 : 52;
+    if (assets?.drawAttackIcon(ctx, attackId, projectile.x, projectile.y, size, rotation, 0.9)) return;
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(rotation);
     ctx.globalCompositeOperation = 'lighter';
     if (projectile.kind === 'lance') {
       drawGlow(ctx, 0, 0, 44, '#55cfff', 0.56);
@@ -790,7 +813,7 @@ export class AttackSystem {
     ctx.restore();
   }
 
-  private drawBlades(ctx: CanvasRenderingContext2D, player: Player, rank: number, time: number): void {
+  private drawBlades(ctx: CanvasRenderingContext2D, player: Player, rank: number, time: number, assets?: ArtAssets): void {
     const count = 2 + rank;
     for (let index = 0; index < count; index += 1) {
       const angle = player.orbitAngle * (1.3 + rank * 0.08) + (Math.PI * 2 * index) / count;
@@ -800,6 +823,10 @@ export class AttackSystem {
       ctx.translate(x, y);
       ctx.rotate(angle + Math.PI / 2 + Math.sin(time * 0.004 + index) * 0.2);
       ctx.globalCompositeOperation = 'lighter';
+      if (assets?.drawAttackIcon(ctx, 'crownOfBlades', 0, 0, 44, 0, 0.9)) {
+        ctx.restore();
+        continue;
+      }
       drawGlow(ctx, 0, 0, 15, '#f1c96c', 0.38);
       ctx.fillStyle = '#f3e6bd';
       ctx.strokeStyle = '#b88439';

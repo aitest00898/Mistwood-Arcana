@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v13-performance-assets';
+const CACHE_NAME = 'mistwood-arcana-shell-v14-hd-art-camera-audio';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,
@@ -7,9 +7,10 @@ const APP_SHELL = [
   new URL('pwa/icon-192.png', APP_BASE).href,
   new URL('pwa/icon-512.png', APP_BASE).href,
   new URL('assets/forest-atmosphere.webp', APP_BASE).href,
-  new URL('assets/characters/aether-mage/directional-atlas.webp', APP_BASE).href,
-  new URL('assets/characters/holy-spellblade/directional-atlas.webp', APP_BASE).href,
-  new URL('assets/characters/mistwood-ranger/directional-atlas.webp', APP_BASE).href,
+  new URL('assets/characters/aether-mage/directional-atlas-hd.webp', APP_BASE).href,
+  new URL('assets/characters/holy-spellblade/directional-atlas-hd.webp', APP_BASE).href,
+  new URL('assets/characters/mistwood-ranger/directional-atlas-hd.webp', APP_BASE).href,
+  new URL('assets/attacks/attack-atlas.webp', APP_BASE).href,
   new URL('assets/characters/selection/aether-mage.webp', APP_BASE).href,
   new URL('assets/characters/selection/holy-spellblade.webp', APP_BASE).href,
   new URL('assets/characters/selection/mistwood-ranger.webp', APP_BASE).href,

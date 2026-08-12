@@ -85,7 +85,7 @@ export class World {
   private generateDetails(): void {
     const random = seededRandom(8122026);
     const mossColors = ['#75ae79', '#5f9a76', '#8cbc72', '#4d846f'];
-    for (let i = 0; i < 34; i += 1) {
+    for (let i = 0; i < 48; i += 1) {
       const x = 100 + random() * (WORLD_WIDTH - 200);
       const y = 130 + random() * (WORLD_HEIGHT - 260);
       if (Math.hypot(x - WORLD_WIDTH / 2, y - WORLD_HEIGHT / 2) < 150) {
@@ -103,7 +103,7 @@ export class World {
       });
     }
     const grassTints = ['#3d8052', '#4a9157', '#6aa25c', '#2d6849', '#83b56d'];
-    for (let i = 0; i < 720; i += 1) {
+    for (let i = 0; i < 1120; i += 1) {
       this.grass.push({
         x: random() * WORLD_WIDTH,
         y: random() * WORLD_HEIGHT,
@@ -113,7 +113,7 @@ export class World {
       });
     }
     const flowerColors = ['#e9f3aa', '#fff4d2', '#c7f3dc', '#f1df81'];
-    for (let i = 0; i < 210; i += 1) {
+    for (let i = 0; i < 330; i += 1) {
       this.flowers.push({
         x: random() * WORLD_WIDTH,
         y: random() * WORLD_HEIGHT,
@@ -121,11 +121,11 @@ export class World {
         scale: 0.55 + random() * 0.7,
       });
     }
-    for (let i = 0; i < 58; i += 1) {
+    for (let i = 0; i < 88; i += 1) {
       this.berries.push({ x: 40 + random() * (WORLD_WIDTH - 80), y: 60 + random() * (WORLD_HEIGHT - 120) });
     }
     const treeTints = ['#173f38', '#1b4b3a', '#245746', '#194239'];
-    for (let i = 0; i < 18; i += 1) {
+    for (let i = 0; i < 28; i += 1) {
       let x = random() * WORLD_WIDTH;
       let y = random() * WORLD_HEIGHT;
       let tries = 0;

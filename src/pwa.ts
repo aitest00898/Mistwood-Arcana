@@ -10,7 +10,7 @@ export const registerPwa = (): void => {
     // Keep the script URL versioned so an installed iOS PWA actively checks
     // for a new worker after a deployment instead of holding the previous
     // shell indefinitely.
-    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=13`, { scope: import.meta.env.BASE_URL }).then((registration) => {
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=14`, { scope: import.meta.env.BASE_URL }).then((registration) => {
       void registration.update().catch(() => {
         // A failed background update must never block the game.
       });

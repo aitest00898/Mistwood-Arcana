@@ -108,10 +108,24 @@ export const drawOrbitalRing = (ctx: CanvasRenderingContext2D, x: number, y: num
   ctx.restore();
 };
 
-export const drawOrb = (ctx: CanvasRenderingContext2D, orb: OrbPosition, time: number): void => {
+export const drawOrb = (ctx: CanvasRenderingContext2D, orb: OrbPosition, time: number, assets?: ArtAssets): void => {
   const pulse = 1 + Math.sin(time * 0.009 + orb.pulse) * 0.08;
   const radius = 11.5 * pulse;
   const phase = time * 0.002 + orb.pulse;
+  if (assets?.drawAttackIcon(ctx, 'lightning', orb.x, orb.y, 54 * pulse, phase * 0.35, 0.9)) {
+    // A smaller moving containment ring keeps the orb visually anchored to
+    // the orbit path without reverting to the old app-icon circle.
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.42;
+    ctx.strokeStyle = '#c8fff4';
+    ctx.lineWidth = 0.75;
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, 29 * pulse, phase, phase + Math.PI * 1.25);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   drawGlow(ctx, orb.x, orb.y, 44 * pulse, COLORS.electric, 0.92);

@@ -11,6 +11,7 @@
     "prepare:hero16": "node scripts/prepare-hero-16.mjs",
     "prepare:selection-art": "node scripts/prepare-selection-art.mjs",
     "prepare:runtime-webp": "node scripts/prepare-runtime-webp.mjs",
+    "prepare:hd-art": "node scripts/prepare-hd-art.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

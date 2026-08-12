@@ -13,7 +13,7 @@ export const HEROES: HeroDefinition[] = [
     palette: ['#172d63', '#f7f2df', '#bd9250', '#43e8ff'],
     masterArt: 'characters/aether-mage-master.png',
     selectionArt: 'characters/selection/aether-mage.webp',
-    directionalAtlas: 'characters/aether-mage/directional-atlas.webp',
+    directionalAtlas: 'characters/aether-mage/directional-atlas-hd.webp',
     spriteIndex: 0,
   },
   {
@@ -26,7 +26,7 @@ export const HEROES: HeroDefinition[] = [
     palette: ['#f7f3e4', '#6b84c7', '#c9a150', '#8ce9ff'],
     masterArt: 'characters/holy-spellblade-master.png',
     selectionArt: 'characters/selection/holy-spellblade.webp',
-    directionalAtlas: 'characters/holy-spellblade/directional-atlas.webp',
+    directionalAtlas: 'characters/holy-spellblade/directional-atlas-hd.webp',
     spriteIndex: 1,
   },
   {
@@ -39,7 +39,7 @@ export const HEROES: HeroDefinition[] = [
     palette: ['#1e493b', '#282923', '#8b6942', '#88c9a0'],
     masterArt: 'characters/mistwood-ranger-master.png',
     selectionArt: 'characters/selection/mistwood-ranger.webp',
-    directionalAtlas: 'characters/mistwood-ranger/directional-atlas.webp',
+    directionalAtlas: 'characters/mistwood-ranger/directional-atlas-hd.webp',
     spriteIndex: 2,
   },
 ];
@@ -106,9 +106,10 @@ export class ArtAssets {
   readonly selectionReady: Promise<void>;
   readonly gameplayReady: Promise<void>;
   private enemyAtlas: HTMLImageElement | null = null;
+  private attackAtlas: HTMLImageElement | null = null;
   private readonly directionalAtlases = new Map<HeroId, HTMLImageElement>();
   private readonly selectionArts = new Map<HeroId, HTMLImageElement>();
-  private readonly loadingTotal = HEROES.length * 2 + 1;
+  private readonly loadingTotal = HEROES.length * 2 + 2;
   private loadingFinished = 0;
   private loadingFailures = 0;
   private selectionFinished = 0;
@@ -144,10 +145,13 @@ export class ArtAssets {
       const enemyPromise = track('enemies/enemy-atlas.webp', 'gameplay').then((image) => {
         this.enemyAtlas = image;
       });
+      const attackPromise = track('attacks/attack-atlas.webp', 'gameplay').then((image) => {
+        this.attackAtlas = image;
+      });
       const heroPromises = HEROES.map((hero) => track(hero.directionalAtlas, 'gameplay').then((image) => {
         if (image) this.directionalAtlases.set(hero.id, image);
       }));
-      return Promise.all([enemyPromise, ...heroPromises]).then(() => undefined).finally(() => {
+      return Promise.all([enemyPromise, attackPromise, ...heroPromises]).then(() => undefined).finally(() => {
         this.gameplayLoadMs = performance.now() - gameplayStartedAt;
         this.gameplayComplete = true;
       });
@@ -189,8 +193,47 @@ export class ArtAssets {
 
   isEnemyReady(): boolean { return Boolean(this.enemyAtlas); }
 
+  isAttackReady(): boolean { return Boolean(this.attackAtlas); }
+
   isSelectionReady(hero: HeroDefinition): boolean {
     return Boolean(this.selectionArts.get(hero.id));
+  }
+
+  drawAttackIcon(ctx: CanvasRenderingContext2D, id: string, x: number, y: number, size: number, rotation = 0, alpha = 1): boolean {
+    if (!this.attackAtlas) return false;
+    const indexById: Record<string, number> = {
+      eclipseArc: 0,
+      astralLance: 1,
+      sanctumThorns: 2,
+      gravityWell: 3,
+      starfeatherFamiliar: 4,
+      crownOfBlades: 5,
+      thornJavelin: 6,
+      ricochetStar: 7,
+      prismRefraction: 8,
+      galeReaper: 9,
+      celestialFall: 10,
+      echoShade: 11,
+      mirrorTwin: 12,
+      mistwoodRuneMine: 13,
+      moonreturnChakram: 14,
+      lightning: 15,
+    };
+    const index = indexById[id];
+    if (index === undefined) return false;
+    const cells = 4;
+    const cellWidth = this.attackAtlas.width / cells;
+    const cellHeight = this.attackAtlas.height / cells;
+    const column = index % cells;
+    const row = Math.floor(index / cells);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.globalAlpha = alpha;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(this.attackAtlas, column * cellWidth, row * cellHeight, cellWidth, cellHeight, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return true;
   }
 
   drawHeroSprite(ctx: CanvasRenderingContext2D, hero: HeroDefinition, player: Player, time: number): void {

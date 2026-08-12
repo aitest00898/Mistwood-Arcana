@@ -1,7 +1,11 @@
 export const GAME_WIDTH = 512;
 export const GAME_HEIGHT = 728;
-export const WORLD_WIDTH = 2304;
-export const WORLD_HEIGHT = 2680;
+// The playable world is intentionally much larger than the portrait frame.
+// WORLD_VIEW_ZOOM controls the camera lens only; HUD coordinates remain in the
+// 512x728 logical surface so touch layouts stay stable.
+export const WORLD_WIDTH = 3072;
+export const WORLD_HEIGHT = 3840;
+export const WORLD_VIEW_ZOOM = 0.74;
 
 export const COLORS = {
   ink: '#06120f',

@@ -1,6 +1,6 @@
 {
   "project": "Mistwood Arcana",
-  "version": 3,
+  "version": 4,
   "source": "Original project art plus the user-supplied hero direction sheet and high-resolution selection reference, locally cropped and connected-background processed for runtime transparency.",
   "runtime": {
     "legacyHeroAtlas": {
@@ -25,10 +25,17 @@
     }
   },
   "heroes": [
-    { "id": "aether-mage", "master": "characters/aether-mage/concept/aether-mage-master.png", "selectionArt": "characters/selection/aether-mage.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/aether-mage/runtime/directional-atlas.webp", "sourceRows": [0, 1], "palette": ["#172d63", "#f7f2df", "#bd9250", "#43e8ff"] },
-    { "id": "holy-spellblade", "master": "characters/holy-spellblade/concept/holy-spellblade-master.png", "selectionArt": "characters/selection/holy-spellblade.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/holy-spellblade/runtime/directional-atlas.webp", "sourceRows": [2, 3], "palette": ["#f7f3e4", "#6b84c7", "#c9a150", "#8ce9ff"] },
-    { "id": "mistwood-ranger", "master": "characters/mistwood-ranger/concept/mistwood-ranger-master.png", "selectionArt": "characters/selection/mistwood-ranger.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/mistwood-ranger/runtime/directional-atlas.webp", "sourceRows": [4, 5], "palette": ["#1e493b", "#282923", "#8b6942", "#88c9a0"] }
+    { "id": "aether-mage", "master": "characters/aether-mage/concept/aether-mage-master.png", "selectionArt": "characters/selection/aether-mage.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/aether-mage/runtime/directional-atlas-hd.webp", "source": "characters/source/aether-mage-16-direction-hd.png", "sourceRows": [0, 1], "palette": ["#172d63", "#f7f2df", "#bd9250", "#43e8ff"] },
+    { "id": "holy-spellblade", "master": "characters/holy-spellblade/concept/holy-spellblade-master.png", "selectionArt": "characters/selection/holy-spellblade.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/holy-spellblade/runtime/directional-atlas-hd.webp", "source": "characters/source/holy-spellblade-16-direction-hd.png", "sourceRows": [2, 3], "palette": ["#f7f3e4", "#6b84c7", "#c9a150", "#8ce9ff"] },
+    { "id": "mistwood-ranger", "master": "characters/mistwood-ranger/concept/mistwood-ranger-master.png", "selectionArt": "characters/selection/mistwood-ranger.webp", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/mistwood-ranger/runtime/directional-atlas-hd.webp", "source": "characters/source/mistwood-ranger-16-direction-hd.png", "sourceRows": [4, 5], "palette": ["#1e493b", "#282923", "#8b6942", "#88c9a0"] }
   ],
+  "attacks": {
+    "source": "attacks/source/attack-atlas-hd.png",
+    "runtimeAtlas": "attacks/runtime/attack-atlas.png",
+    "webp": "public/assets/attacks/attack-atlas.webp",
+    "grid": "4x4",
+    "cells": ["eclipseArc", "astralLance", "sanctumThorns", "gravityWell", "starfeatherFamiliar", "crownOfBlades", "thornJavelin", "ricochetStar", "prismRefraction", "galeReaper", "celestialFall", "echoShade", "mirrorTwin", "mistwoodRuneMine", "moonreturnChakram", "lightning"]
+  },
   "enemies": [
     { "id": "mistSlime", "name": "霧凝膠", "atlasIndex": 0, "concept": "enemies/lineup/mistwood-enemy-concept-lineup.png" },
     { "id": "sproutSlime", "name": "芽生凝膠", "atlasIndex": 1, "concept": "enemies/lineup/mistwood-enemy-concept-lineup.png" },

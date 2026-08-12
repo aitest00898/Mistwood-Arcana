@@ -16,6 +16,14 @@ export class AudioEngine {
   private combatIntensity = 0;
   private readonly activeVoices = new Map<string, number>();
   private readonly lastEvent = new Map<string, number>();
+  private activeSfxVoices = 0;
+  private lightningPending = 0;
+  private lightningTimer: number | null = null;
+  private hitPending = 0;
+  private hitCritical = false;
+  private hitTimer: number | null = null;
+  private deathPending = 0;
+  private deathTimer: number | null = null;
 
   get isMuted(): boolean { return this.muted; }
 
@@ -25,25 +33,34 @@ export class AudioEngine {
       if (!AudioContextCtor) return null;
       this.context = new AudioContextCtor();
       const finalLimiter = this.context.createDynamicsCompressor();
-      finalLimiter.threshold.value = -3.5;
-      finalLimiter.knee.value = 2;
+      finalLimiter.threshold.value = -6;
+      finalLimiter.knee.value = 3;
       finalLimiter.ratio.value = 20;
       finalLimiter.attack.value = 0.001;
-      finalLimiter.release.value = 0.16;
+      finalLimiter.release.value = 0.2;
       finalLimiter.connect(this.context.destination);
+      const safetyClip = this.context.createWaveShaper();
+      const curve = new Float32Array(2048);
+      for (let index = 0; index < curve.length; index += 1) {
+        const sample = (index / (curve.length - 1)) * 2 - 1;
+        curve[index] = Math.tanh(sample * 1.15) / Math.tanh(1.15);
+      }
+      safetyClip.curve = curve;
+      safetyClip.oversample = '2x';
+      safetyClip.connect(finalLimiter);
       this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = this.muted ? 0 : 0.48;
-      this.masterGain.connect(finalLimiter);
+      this.masterGain.gain.value = this.muted ? 0 : 0.34;
+      this.masterGain.connect(safetyClip);
 
       const sfxCompressor = this.context.createDynamicsCompressor();
-      sfxCompressor.threshold.value = -30;
-      sfxCompressor.knee.value = 22;
-      sfxCompressor.ratio.value = 8;
+      sfxCompressor.threshold.value = -18;
+      sfxCompressor.knee.value = 12;
+      sfxCompressor.ratio.value = 10;
       sfxCompressor.attack.value = 0.003;
-      sfxCompressor.release.value = 0.13;
+      sfxCompressor.release.value = 0.16;
       sfxCompressor.connect(this.masterGain);
       this.sfxGain = this.context.createGain();
-      this.sfxGain.gain.value = 0.42;
+      this.sfxGain.gain.value = 0.3;
       this.sfxGain.connect(sfxCompressor);
 
       const musicCompressor = this.context.createDynamicsCompressor();
@@ -54,7 +71,7 @@ export class AudioEngine {
       musicCompressor.release.value = 0.24;
       musicCompressor.connect(this.masterGain);
       this.musicGain = this.context.createGain();
-      this.musicGain.gain.value = 0.14;
+      this.musicGain.gain.value = 0.11;
       this.musicGain.connect(musicCompressor);
     }
     if (this.context.state === 'suspended') void this.context.resume();
@@ -92,7 +109,7 @@ export class AudioEngine {
       this.musicTimer = null;
     } else {
       const context = this.ensure();
-      if (this.masterGain && context) this.masterGain.gain.setTargetAtTime(0.48, context.currentTime, 0.08);
+      if (this.masterGain && context) this.masterGain.gain.setTargetAtTime(0.34, context.currentTime, 0.08);
       this.musicStarted = false;
       this.startMusic();
     }
@@ -102,10 +119,11 @@ export class AudioEngine {
   private allowVoice(kind: string, maxVoices: number, cooldown: number): boolean {
     const now = performance.now() / 1000;
     const active = this.activeVoices.get(kind) ?? 0;
-    if (active >= maxVoices) return false;
+    if (active >= maxVoices || this.activeSfxVoices >= 18) return false;
     if (now - (this.lastEvent.get(kind) ?? -Infinity) < cooldown) return false;
     this.lastEvent.set(kind, now);
     this.activeVoices.set(kind, active + 1);
+    this.activeSfxVoices += 1;
     return true;
   }
 
@@ -113,6 +131,7 @@ export class AudioEngine {
     window.setTimeout(() => {
       const active = this.activeVoices.get(kind) ?? 0;
       this.activeVoices.set(kind, Math.max(0, active - 1));
+      this.activeSfxVoices = Math.max(0, this.activeSfxVoices - 1);
     }, Math.max(80, duration * 1000 + 80));
   }
 
@@ -126,7 +145,7 @@ export class AudioEngine {
     oscillator.frequency.setValueAtTime(Math.max(30, frequency), start);
     oscillator.frequency.linearRampToValueAtTime(Math.max(30, frequency + slide), start + duration);
     envelope.gain.setValueAtTime(0.0001, start);
-    envelope.gain.linearRampToValueAtTime(Math.max(0.0001, gain), start + Math.min(0.018, duration * 0.18));
+    envelope.gain.linearRampToValueAtTime(Math.min(0.018, Math.max(0.0001, gain)), start + Math.min(0.018, duration * 0.18));
     envelope.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(0.035, duration - 0.012));
     oscillator.connect(envelope);
     envelope.connect(this.sfxGain);
@@ -153,7 +172,7 @@ export class AudioEngine {
     source.buffer = buffer;
     const start = context.currentTime + 0.006;
     envelope.gain.setValueAtTime(0.0001, start);
-    envelope.gain.linearRampToValueAtTime(gain, start + Math.min(0.012, duration * 0.2));
+    envelope.gain.linearRampToValueAtTime(Math.min(0.009, Math.max(0.0001, gain)), start + Math.min(0.012, duration * 0.2));
     envelope.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(0.03, duration - 0.012));
     source.connect(filter);
     filter.connect(envelope);
@@ -164,10 +183,19 @@ export class AudioEngine {
   }
 
   lightning(intensity = 1): void {
-    const strength = Math.max(0.45, Math.min(1.45, intensity));
-    this.tone('lightning', 174, 0.13, 0.014 * strength, 'triangle', 270, 4, 0.055);
-    this.tone('lightning-crystal', 560, 0.075, 0.006 * strength, 'sine', -150, 3, 0.055);
-    this.noiseBurst('lightning-noise', 0.05, 0.0045 * strength, 1700, 3, 0.055);
+    this.lightningPending = Math.min(2.6, this.lightningPending + Math.max(0.35, Math.min(1.35, intensity)) * 0.68);
+    if (this.lightningTimer !== null) return;
+    // Chain lightning can touch many targets in a single frame. Emit one
+    // composed discharge for the short event window instead of one voice per
+    // segment; this removes the burst that was causing iOS crackle/pop.
+    this.lightningTimer = window.setTimeout(() => {
+      this.lightningTimer = null;
+      const strength = Math.max(0.45, Math.min(1.35, this.lightningPending));
+      this.lightningPending = 0;
+      this.tone('lightning', 174, 0.13, 0.008 * strength, 'triangle', 270, 2, 0.07);
+      this.tone('lightning-crystal', 560, 0.075, 0.0038 * strength, 'sine', -150, 2, 0.07);
+      this.noiseBurst('lightning-noise', 0.05, 0.0024 * strength, 1700, 1, 0.07);
+    }, 28);
   }
 
   attack(id: AttackId, intensity = 1): void {
@@ -186,12 +214,29 @@ export class AudioEngine {
   }
 
   hit(critical = false): void {
-    this.tone('hit', critical ? 620 : 360, critical ? 0.09 : 0.06, critical ? 0.013 : 0.006, 'triangle', critical ? 220 : -70, 5, 0.025);
+    this.hitPending = Math.min(2.2, this.hitPending + (critical ? 0.9 : 0.28));
+    this.hitCritical ||= critical;
+    if (this.hitTimer !== null) return;
+    this.hitTimer = window.setTimeout(() => {
+      this.hitTimer = null;
+      const criticalHit = this.hitCritical;
+      const strength = Math.max(0.38, Math.min(1.2, this.hitPending));
+      this.hitPending = 0;
+      this.hitCritical = false;
+      this.tone('hit', criticalHit ? 620 : 360, criticalHit ? 0.09 : 0.06, (criticalHit ? 0.007 : 0.0038) * strength, 'triangle', criticalHit ? 220 : -70, 2, 0.06);
+    }, 32);
   }
 
   death(): void {
-    this.tone('death', 170, 0.2, 0.022, 'triangle', -110, 4, 0.04);
-    this.noiseBurst('death-noise', 0.14, 0.012, 500, 3, 0.04);
+    this.deathPending = Math.min(2.4, this.deathPending + 0.55);
+    if (this.deathTimer !== null) return;
+    this.deathTimer = window.setTimeout(() => {
+      this.deathTimer = null;
+      const strength = Math.max(0.45, Math.min(1.2, this.deathPending));
+      this.deathPending = 0;
+      this.tone('death', 170, 0.2, 0.009 * strength, 'triangle', -110, 2, 0.09);
+      this.noiseBurst('death-noise', 0.14, 0.0045 * strength, 500, 1, 0.09);
+    }, 60);
   }
 
   pickup(): void { this.tone('pickup', 620, 0.08, 0.012, 'sine', 240, 5, 0.035); }
@@ -252,6 +297,27 @@ export class AudioEngine {
     source.stop(start + duration + 0.03);
   }
 
+  private musicPluck(frequency: number, start: number, duration: number, gain: number): void {
+    const context = this.context;
+    if (!context || !this.musicGain) return;
+    const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
+    const envelope = context.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(frequency, start);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2400, start);
+    filter.frequency.exponentialRampToValueAtTime(700, start + duration);
+    envelope.gain.setValueAtTime(0.0001, start);
+    envelope.gain.linearRampToValueAtTime(gain, start + 0.012);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(0.05, duration));
+    oscillator.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(this.musicGain);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.035);
+  }
+
   private scheduleMusicStep(): void {
     const context = this.ensure();
     if (!context || this.muted || !this.musicGain) return;
@@ -265,18 +331,22 @@ export class AudioEngine {
     const motif = [0, 2, 4, 3, 1, 4, 2, 5];
     const note = root * minor[(motif[step % 8] + phase) % minor.length];
     // 192 scheduled steps at 360ms create a varied ~69-second score before
-    // the harmonic movement returns to its opening phase.
+    // the harmonic movement returns to its opening phase. Bass, pad, harp-like
+    // plucks, horn-like sustained tones and restrained percussion form an
+    // arrangement instead of a single repeating MIDI-like line.
     this.musicNote(root / 2, start, 0.62, 0.042, 'sine');
     this.musicNote(root / 2 * 1.005, start, 0.58, 0.026, 'triangle');
     this.musicNote(note, start, 0.24, phase === 4 ? 0.022 : 0.015, 'triangle');
-    if (step % 2 === 1) this.musicNote(note * 2, start + 0.04, 0.15, 0.008, 'sine');
+    if (step % 2 === 1) this.musicPluck(note * 2, start + 0.04, 0.18, 0.0065);
+    if (step % 4 === 0) this.musicPluck(root * minor[(step / 4 + phase) % minor.length], start + 0.02, 0.2, 0.0055);
     if (step % 8 === 0) {
       const chord = phase === 3 || phase === 4 ? [1, 1.189, 1.498] : [1, 1.189, 1.414];
       chord.forEach((ratio, index) => this.musicNote(root * ratio, start, 1.35, 0.009 - index * 0.0015, 'sine'));
       this.musicNote(root * 3, start, 0.5, phase === 4 ? 0.022 : 0.012, 'triangle');
     }
-    if (step % 4 === 2 && phase >= 2) this.musicNoise(start, 0.07, 0.006 + this.combatIntensity * 0.006);
-    if (step % 16 === 0 && phase !== 0) this.musicNote(root * 2.5, start, 0.42, 0.014, 'sine');
+    if (step % 4 === 2 && phase >= 2) this.musicNoise(start, 0.07, 0.003 + this.combatIntensity * 0.003);
+    if (step % 16 === 0 && phase !== 0) this.musicNote(root * 2.5, start, 0.62, 0.009, 'sawtooth');
+    if (step % 32 === 24 && phase === 4) this.musicNote(root * 4, start, 0.28, 0.006, 'triangle');
     this.musicStep += 1;
   }
 }

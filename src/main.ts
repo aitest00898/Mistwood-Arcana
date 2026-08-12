@@ -2,7 +2,7 @@ import './styles.css';
 import { AudioEngine } from './audio';
 import { ArtAssets, ENEMIES, HEROES, enemyDefinition, heroDefinition } from './assets';
 import type { AssetLoadingState } from './assets';
-import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './config';
+import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH, WORLD_VIEW_ZOOM } from './config';
 import { drawEnemy, drawOrb, drawOrbitalRing, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
 import { InputManager } from './input';
 import { direction16FromVector } from './directions';
@@ -139,7 +139,7 @@ class MistwoodGame {
     this.orbPositions = [];
     this.orbPositionsElapsed = -1;
     this.attackSystem.reset(this.player);
-    this.camera = { x: this.player.x - GAME_WIDTH / 2, y: this.player.y - GAME_HEIGHT / 2 };
+    this.camera = this.cameraTarget();
     for (let i = 0; i < 10; i += 1) this.spawnEnemy(true);
     if (this.perfStress) this.setupPerformanceScenario();
     this.resetPerformanceCounters();
@@ -374,10 +374,24 @@ class MistwoodGame {
   }
 
   private updateCamera(dt: number): void {
-    const targetX = clamp(this.player.x - GAME_WIDTH / 2, 0, WORLD_WIDTH - GAME_WIDTH);
-    const targetY = clamp(this.player.y - GAME_HEIGHT / 2, 0, WORLD_HEIGHT - GAME_HEIGHT);
+    const target = this.cameraTarget();
+    const targetX = target.x;
+    const targetY = target.y;
     this.camera.x = lerp(this.camera.x, targetX, 1 - Math.exp(-dt * 4.3));
     this.camera.y = lerp(this.camera.y, targetY, 1 - Math.exp(-dt * 4.3));
+  }
+
+  private worldView(): { width: number; height: number } {
+    const rect = this.ui.getVisibleRect();
+    return { width: rect.width / WORLD_VIEW_ZOOM, height: rect.height / WORLD_VIEW_ZOOM };
+  }
+
+  private cameraTarget(): Vec2 {
+    const view = this.worldView();
+    return {
+      x: clamp(this.player.x - view.width / 2, 0, Math.max(0, WORLD_WIDTH - view.width)),
+      y: clamp(this.player.y - view.height / 2, 0, Math.max(0, WORLD_HEIGHT - view.height)),
+    };
   }
 
   private updateEnemies(dt: number): void {
@@ -626,7 +640,7 @@ class MistwoodGame {
 
   private spawnEnemy(initial: boolean, kindOverride?: Enemy['kind'], distanceOverride?: number): void {
     const angle = Math.random() * Math.PI * 2;
-    const distance = distanceOverride ?? (initial ? randomRange(220, 350) : randomRange(360, 500));
+    const distance = distanceOverride ?? (initial ? randomRange(300, 460) : randomRange(540, 760));
     let x = this.player.x + Math.cos(angle) * distance;
     let y = this.player.y + Math.sin(angle) * distance;
     x = clamp(x, 70, WORLD_WIDTH - 70);
@@ -663,11 +677,11 @@ class MistwoodGame {
     const positions: OrbPosition[] = [];
     for (let i = 0; i < this.stats.orbCount; i += 1) {
       const angle = this.player.orbitAngle + (Math.PI * 2 * i) / this.stats.orbCount;
-      const radiusX = 68 + Math.sin(this.elapsed * 2.7 + i) * 3.5;
-      const radiusY = 39 + Math.sin(this.elapsed * 2.1 + i * 0.7) * 2.2;
+      const radiusX = 86 + Math.sin(this.elapsed * 2.7 + i) * 4.5;
+      const radiusY = 54 + Math.sin(this.elapsed * 2.1 + i * 0.7) * 3.2;
       positions.push({
         x: this.player.x + Math.cos(angle) * radiusX,
-        y: this.player.y - 25 + Math.sin(angle) * radiusY,
+        y: this.player.y - 30 + Math.sin(angle) * radiusY,
         pulse: i * 1.6,
       });
     }
@@ -698,9 +712,10 @@ class MistwoodGame {
 
   private spawnAmbientParticle(): void {
     const random = seededRandom(Math.floor(this.elapsed * 77));
+    const view = this.worldView();
     this.particles.push({
-      x: this.camera.x + random() * GAME_WIDTH,
-      y: this.camera.y + 90 + random() * 470,
+      x: this.camera.x + random() * view.width,
+      y: this.camera.y + view.height * 0.12 + random() * view.height * 0.68,
       vx: randomRange(-3, 3),
       vy: randomRange(-8, -2),
       life: 1.1,
@@ -797,19 +812,29 @@ class MistwoodGame {
       this.world.draw(ctx, time, { left: 0, top: 0, right: GAME_WIDTH, bottom: GAME_HEIGHT });
       if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
     } else {
+      const visible = this.ui.getVisibleRect();
+      const view = this.worldView();
       ctx.save();
-      ctx.translate(-this.camera.x, -this.camera.y);
+      // Render the world through the actual visible logical rectangle. The
+      // HUD remains 1:1, while the camera lens shows a wider, taller slice of
+      // the larger world without changing touch coordinates.
+      ctx.beginPath();
+      ctx.rect(visible.left, visible.top, visible.width, visible.height);
+      ctx.clip();
+      ctx.translate(visible.centerX, visible.centerY);
+      ctx.scale(WORLD_VIEW_ZOOM, WORLD_VIEW_ZOOM);
+      ctx.translate(-this.camera.x - view.width / 2, -this.camera.y - view.height / 2);
       const worldStart = this.perfEnabled ? performance.now() : 0;
-      this.world.draw(ctx, time, { left: this.camera.x, top: this.camera.y, right: this.camera.x + GAME_WIDTH, bottom: this.camera.y + GAME_HEIGHT });
+      this.world.draw(ctx, time, { left: this.camera.x, top: this.camera.y, right: this.camera.x + view.width, bottom: this.camera.y + view.height });
       if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
       for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
       for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time, this.assets);
-      this.attackSystem.draw(ctx, this.player, this.stats, time);
+      this.attackSystem.draw(ctx, this.player, this.stats, time, this.assets);
       const orbs = this.getOrbPositions();
-      drawOrbitalRing(ctx, this.player.x, this.player.y - 25, 76, 45, time);
-      for (const orb of orbs) if (orb.y < this.player.y - 20) drawOrb(ctx, orb, time);
+      drawOrbitalRing(ctx, this.player.x, this.player.y - 30, 94, 60, time);
+      for (const orb of orbs) if (orb.y < this.player.y - 24) drawOrb(ctx, orb, time, this.assets);
       drawPlayer(ctx, this.player, time, this.assets);
-      for (const orb of orbs) if (orb.y >= this.player.y - 20) drawOrb(ctx, orb, time);
+      for (const orb of orbs) if (orb.y >= this.player.y - 24) drawOrb(ctx, orb, time, this.assets);
       for (const particle of this.particles) drawParticle(ctx, particle);
       for (const lightning of this.lightnings) this.drawLightning(ctx, lightning, time);
       this.drawDamageTexts(ctx);
