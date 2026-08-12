@@ -66,6 +66,93 @@ const floodBackground = (rgba, width, height) => {
   return rgba;
 };
 
+// The supplied sheet is a JPEG on white paper. Flood filling removes the
+// connected paper, but anti-aliased JPEG pixels keep a pale fringe around hair,
+// capes and weapon crystals. Decontaminate only edge pixels that still have a
+// transparent neighbour; opaque white costume areas remain untouched.
+const cleanChromaFringe = (rgba, width, height) => {
+  const source = Buffer.from(rgba);
+  const indexAt = (x, y) => (y * width + x) * 4;
+  const hasTransparentNeighbour = (x, y) => {
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        if (ox === 0 && oy === 0) continue;
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx >= 0 && ny >= 0 && nx < width && ny < height && source[indexAt(nx, ny) + 3] === 0) return true;
+      }
+    }
+    return false;
+  };
+  const transparentDistance = (x, y) => {
+    for (let radius = 1; radius <= 2; radius += 1) {
+      for (let oy = -radius; oy <= radius; oy += 1) {
+        for (let ox = -radius; ox <= radius; ox += 1) {
+          if (Math.max(Math.abs(ox), Math.abs(oy)) !== radius) continue;
+          const nx = x + ox;
+          const ny = y + oy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height && source[indexAt(nx, ny) + 3] === 0) return radius;
+        }
+      }
+    }
+    return 3;
+  };
+  const nearestTintedPixel = (x, y) => {
+    let best = null;
+    let bestScore = -Infinity;
+    for (let oy = -2; oy <= 2; oy += 1) {
+      for (let ox = -2; ox <= 2; ox += 1) {
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const offset = indexAt(nx, ny);
+        if (source[offset + 3] === 0) continue;
+        const r = source[offset];
+        const g = source[offset + 1];
+        const b = source[offset + 2];
+        const min = Math.min(r, g, b);
+        const max = Math.max(r, g, b);
+        const saturation = max - min;
+        const distance = Math.abs(ox) + Math.abs(oy);
+        const score = saturation * 1.8 + (255 - min) - distance * 12;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { r, g, b };
+        }
+      }
+    }
+    return best;
+  };
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const offset = indexAt(x, y);
+      if (source[offset + 3] === 0 || !hasTransparentNeighbour(x, y)) continue;
+      const r = source[offset];
+      const g = source[offset + 1];
+      const b = source[offset + 2];
+      const min = Math.min(r, g, b);
+      const max = Math.max(r, g, b);
+      const whiteness = Math.max(0, Math.min(1, (min - 172) / 83));
+      const lowSaturation = Math.max(0, Math.min(1, 1 - (max - min) / 62));
+      const tint = nearestTintedPixel(x, y);
+      if (!tint) continue;
+      const blend = whiteness * lowSaturation * 0.78;
+      rgba[offset] = Math.round(r * (1 - blend) + tint.r * blend);
+      rgba[offset + 1] = Math.round(g * (1 - blend) + tint.g * blend);
+      rgba[offset + 2] = Math.round(b * (1 - blend) + tint.b * blend);
+      if (whiteness > 0.58 && lowSaturation > 0.52) {
+        const distance = transparentDistance(x, y);
+        // A paper-white pixel on the first edge ring is almost certainly
+        // background contamination. Remove it rather than leaving a grey halo
+        // when the 192px runtime tile is enlarged in the selector.
+        const edgeAlpha = distance === 1 ? 0 : distance === 2 ? 0.18 : 0.58;
+        rgba[offset + 3] = Math.min(rgba[offset + 3], Math.round(255 * edgeAlpha * (1 - blend * 0.45)));
+      }
+    }
+  }
+  return rgba;
+};
+
 const connectedComponents = (rgba, width, height) => {
   const visited = new Uint8Array(width * height);
   const components = [];
@@ -117,10 +204,32 @@ const makeTile = async (rgba, width, height) => {
   const transparentCrop = await sharp(rgba, { raw: { width, height, channels: 4 } })
     .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .resize({ width: runtimeTile - 20, height: runtimeTile - 18, fit: 'inside', withoutEnlargement: false })
-    .png()
+    .ensureAlpha()
+    .raw()
     .toBuffer({ resolveWithObject: true });
   const tileWidth = transparentCrop.info.width;
   const tileHeight = transparentCrop.info.height;
+  // The source sheet was composited on white paper. After resizing, browser
+  // interpolation can sample RGB values from transparent paper pixels and
+  // create a white fringe. Unmatte partial pixels against white, then clear
+  // fully transparent RGB so Canvas cannot leak the paper colour.
+  for (let index = 0; index < transparentCrop.data.length; index += 4) {
+    const alpha = transparentCrop.data[index + 3] / 255;
+    if (alpha < 0.01) {
+      transparentCrop.data[index] = 0;
+      transparentCrop.data[index + 1] = 0;
+      transparentCrop.data[index + 2] = 0;
+      transparentCrop.data[index + 3] = 0;
+      continue;
+    }
+    if (alpha < 0.98) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        const channelValue = transparentCrop.data[index + channel] / 255;
+        const foreground = Math.max(0, Math.min(1, (channelValue - (1 - alpha)) / alpha));
+        transparentCrop.data[index + channel] = Math.round(foreground * 255);
+      }
+    }
+  }
   const left = Math.floor((runtimeTile - tileWidth) / 2);
   const top = Math.max(3, runtimeTile - tileHeight - 12);
   return sharp({
@@ -130,7 +239,7 @@ const makeTile = async (rgba, width, height) => {
       channels: 4,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
-  }).composite([{ input: transparentCrop.data, left, top }]).png().toBuffer();
+  }).composite([{ input: transparentCrop.data, raw: { width: tileWidth, height: tileHeight, channels: 4 }, left, top }]).png().toBuffer();
 };
 
 const main = async () => {
@@ -147,7 +256,7 @@ const main = async () => {
       const start = (top + y) * info.width * 4;
       data.copy(rowPixels, y * width * 4, start, start + width * 4);
     }
-    const cleanedRow = floodBackground(rowPixels, width, height);
+    const cleanedRow = cleanChromaFringe(floodBackground(rowPixels, width, height), width, height);
     rowComponents.set(row, { rgba: cleanedRow, components: connectedComponents(cleanedRow, width, height), width, height });
   }
   const manifest = {

@@ -20,6 +20,8 @@ export class GameUI {
   private selectionFlash = 0;
   private hoveredCard = -1;
   private hoveredHero = 0;
+  private viewportLeft = 0;
+  private viewportRight = GAME_WIDTH;
 
   constructor(callbacks: UiCallbacks) {
     this.callbacks = callbacks;
@@ -35,6 +37,13 @@ export class GameUI {
 
   setHoveredHero(index: number): void {
     this.hoveredHero = index;
+  }
+
+  setViewport(left: number, right: number, top = 0, bottom = GAME_HEIGHT): void {
+    this.viewportLeft = left;
+    this.viewportRight = right;
+    void top;
+    void bottom;
   }
 
   triggerSelectionFlash(): void {
@@ -62,11 +71,15 @@ export class GameUI {
 
   drawCharacterSelect(ctx: CanvasRenderingContext2D, heroes: HeroDefinition[], selected: number, assets: ArtAssets, elapsed: number, ready: boolean): void {
     const hero = heroes[selected] ?? heroes[0];
+    const heroReady = assets.isHeroReady(hero);
+    const canStart = ready && heroReady;
+    const panelWidth = Math.min(364, Math.max(312, this.viewportRight - this.viewportLeft - 18));
+    const panelX = GAME_WIDTH / 2 - panelWidth / 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(2, 7, 10, .84)';
+    ctx.fillStyle = 'rgba(3, 11, 10, .84)';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     const halo = ctx.createRadialGradient(GAME_WIDTH / 2, 255, 12, GAME_WIDTH / 2, 255, 280);
-    halo.addColorStop(0, `${hero.palette[3]}26`);
+    halo.addColorStop(0, `${hero.palette[2]}2b`);
     halo.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -74,23 +87,30 @@ export class GameUI {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f5ebd6';
     ctx.font = `700 28px ${FONT}`;
-    ctx.shadowColor = 'rgba(118,239,255,.45)';
+    ctx.shadowColor = 'rgba(199,166,99,.38)';
     ctx.shadowBlur = 18;
     ctx.fillText('選擇角色', GAME_WIDTH / 2, 58);
     ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(229,216,187,.7)';
     ctx.font = `11px ${FONT}`;
     ctx.fillText('霧林秘典 · MISTWOOD ARCANA', GAME_WIDTH / 2, 84);
-    roundRectPath(ctx, 74, 102, 364, 378, 18);
-    ctx.fillStyle = 'rgba(11, 21, 25, .76)';
+    roundRectPath(ctx, panelX, 102, panelWidth, 378, 18);
+    ctx.fillStyle = 'rgba(9, 25, 21, .82)';
     ctx.fill();
-    ctx.strokeStyle = hexToRgba(hero.palette[2], 0.72);
+    ctx.strokeStyle = hexToRgba(hero.palette[2], 0.82);
     ctx.lineWidth = 1.3;
     ctx.stroke();
-    ctx.strokeStyle = hexToRgba(hero.palette[3], 0.22);
+    ctx.strokeStyle = hexToRgba(hero.palette[3], 0.16);
     ctx.lineWidth = 5;
     ctx.stroke();
-    assets.drawHeroMaster(ctx, hero, GAME_WIDTH / 2, 294, 300, 352, 0.96);
+    if (heroReady) {
+      assets.drawHeroPreview(ctx, hero, GAME_WIDTH / 2, 274, panelWidth - 50, 278, 0.98);
+    } else {
+      this.drawLoadingGlyph(ctx, GAME_WIDTH / 2, 274, hero.palette[2], elapsed);
+      ctx.fillStyle = 'rgba(235,238,220,.74)';
+      ctx.font = `600 12px ${FONT}`;
+      ctx.fillText('角色圖像載入中…', GAME_WIDTH / 2, 358);
+    }
     ctx.fillStyle = '#fff5df';
     ctx.font = `700 23px ${FONT}`;
     ctx.fillText(hero.name, GAME_WIDTH / 2, 430);
@@ -99,17 +119,17 @@ export class GameUI {
     ctx.fillText(hero.role, GAME_WIDTH / 2, 452);
     ctx.fillStyle = '#c9d8d2';
     ctx.font = `11px ${FONT}`;
-    this.drawWrappedText(ctx, hero.description, GAME_WIDTH / 2, 473, 290, 17, 2);
+    this.drawWrappedText(ctx, hero.description, GAME_WIDTH / 2, 473, panelWidth - 40, 17, 2);
     heroes.forEach((item, index) => this.drawHeroSelector(ctx, item, index, selected, elapsed));
     roundRectPath(ctx, 164, 648, 184, 48, 16);
-    ctx.fillStyle = ready ? hexToRgba(hero.palette[3], 0.22) : 'rgba(74,86,82,.32)';
+    ctx.fillStyle = canStart ? hexToRgba(hero.palette[3], 0.2) : 'rgba(74,86,82,.32)';
     ctx.fill();
-    ctx.strokeStyle = ready ? hexToRgba(hero.palette[3], 0.9) : 'rgba(188,202,193,.42)';
+    ctx.strokeStyle = canStart ? hexToRgba(hero.palette[2], 0.92) : 'rgba(188,202,193,.42)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.fillStyle = ready ? '#f3fff7' : '#a9b7b1';
+    ctx.fillStyle = canStart ? '#f3fff7' : '#a9b7b1';
     ctx.font = `700 16px ${FONT}`;
-    ctx.fillText(ready ? '踏入霧林' : '正在準備秘術…', GAME_WIDTH / 2, 672);
+    ctx.fillText(canStart ? '踏入霧林' : '正在準備秘術…', GAME_WIDTH / 2, 672);
     ctx.fillStyle = 'rgba(221,238,230,.58)';
     ctx.font = `10px ${MONO_FONT}`;
     ctx.fillText('點擊「踏入霧林」開始 · 1 / 2 / 3 選角色', GAME_WIDTH / 2, 710);
@@ -189,7 +209,7 @@ export class GameUI {
   }
 
   hitMute(pointX: number, pointY: number): boolean {
-    return Math.hypot(pointX - 483, pointY - 667) < 24;
+    return Math.hypot(pointX - this.muteX(), pointY - 667) < 24;
   }
 
   private drawTopPill(ctx: CanvasRenderingContext2D, elapsed: number, level: number): void {
@@ -279,7 +299,7 @@ export class GameUI {
   }
 
   private drawSkillNetwork(ctx: CanvasRenderingContext2D, stats: Stats, orbs: OrbPosition[]): void {
-    const cx = 442;
+    const cx = Math.min(442, this.viewportRight - 62);
     const cy = 665;
     const nodes = [
       { x: cx - 48, y: cy - 31, id: 'blessing', locked: skillLevel(stats, 'blessing') === 0 },
@@ -290,7 +310,7 @@ export class GameUI {
     ];
     ctx.save();
     ctx.globalAlpha = 0.95;
-    ctx.strokeStyle = 'rgba(204,232,224,.48)';
+    ctx.strokeStyle = 'rgba(196,169,106,.48)';
     ctx.lineWidth = 1;
     for (const node of nodes) {
       ctx.beginPath();
@@ -304,7 +324,7 @@ export class GameUI {
     polygonPath(ctx, 6, 25);
     ctx.fillStyle = 'rgba(15, 30, 34, .9)';
     ctx.fill();
-    ctx.strokeStyle = centralLevel > 0 ? '#8deeff' : '#e8f4ee';
+    ctx.strokeStyle = centralLevel > 0 ? '#b7ecdc' : '#e8dfc4';
     ctx.lineWidth = 2;
     ctx.stroke();
     drawSkillGlyph(ctx, 'lightning', 18, '#eefeff');
@@ -313,7 +333,7 @@ export class GameUI {
       ctx.save();
       ctx.translate(node.x, node.y);
       polygonPath(ctx, 6, 20);
-      ctx.fillStyle = node.locked ? 'rgba(15,25,28,.84)' : 'rgba(28,77,73,.88)';
+      ctx.fillStyle = node.locked ? 'rgba(11,24,22,.9)' : 'rgba(39,80,66,.88)';
       ctx.fill();
       ctx.strokeStyle = node.locked ? 'rgba(238,245,237,.78)' : '#86e8cb';
       ctx.lineWidth = 1.6;
@@ -350,9 +370,9 @@ export class GameUI {
 
   private drawMuteButton(ctx: CanvasRenderingContext2D, muted: boolean): void {
     ctx.save();
-    ctx.translate(483, 667);
-    ctx.fillStyle = 'rgba(4,15,17,.74)';
-    ctx.strokeStyle = 'rgba(222,246,237,.7)';
+    ctx.translate(this.muteX(), 667);
+    ctx.fillStyle = 'rgba(9,24,20,.82)';
+    ctx.strokeStyle = 'rgba(226,211,167,.72)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(0, 0, 17, 0, Math.PI * 2);
@@ -378,6 +398,35 @@ export class GameUI {
       ctx.arc(1, 0, 8, -0.78, 0.78);
     }
     ctx.stroke();
+    ctx.restore();
+  }
+
+  private muteX(): number {
+    return Math.min(483, this.viewportRight - 18);
+  }
+
+  private drawLoadingGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, elapsed: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(elapsed * 0.9);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = hexToRgba(color, 0.22);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 34, 0.2, Math.PI * 1.72);
+    ctx.stroke();
+    ctx.strokeStyle = hexToRgba(color, 0.86);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 25, -0.7, Math.PI * 0.84);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#e8e5cf';
+    ctx.font = `600 12px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.rotate(-elapsed * 0.9);
+    ctx.fillText('載入中', 0, 0);
     ctx.restore();
   }
 

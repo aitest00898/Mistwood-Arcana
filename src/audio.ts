@@ -3,6 +3,7 @@ type ExtendedWindow = Window & { webkitAudioContext?: typeof AudioContext };
 export class AudioEngine {
   private context: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private sfxGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
   private musicTimer: number | null = null;
   private musicStep = 0;
@@ -19,17 +20,27 @@ export class AudioEngine {
       if (!AudioContextCtor) return null;
       this.context = new AudioContextCtor();
       const compressor = this.context.createDynamicsCompressor();
-      compressor.threshold.value = -20;
+      compressor.threshold.value = -24;
       compressor.knee.value = 18;
-      compressor.ratio.value = 4;
-      compressor.attack.value = 0.006;
-      compressor.release.value = 0.18;
+      compressor.ratio.value = 5.5;
+      compressor.attack.value = 0.004;
+      compressor.release.value = 0.22;
       compressor.connect(this.context.destination);
       this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = this.muted ? 0 : 0.72;
+      this.masterGain.gain.value = this.muted ? 0 : 0.62;
       this.masterGain.connect(compressor);
+      const sfxCompressor = this.context.createDynamicsCompressor();
+      sfxCompressor.threshold.value = -30;
+      sfxCompressor.knee.value = 24;
+      sfxCompressor.ratio.value = 8;
+      sfxCompressor.attack.value = 0.002;
+      sfxCompressor.release.value = 0.12;
+      sfxCompressor.connect(this.masterGain);
+      this.sfxGain = this.context.createGain();
+      this.sfxGain.gain.value = 0.56;
+      this.sfxGain.connect(sfxCompressor);
       this.musicGain = this.context.createGain();
-      this.musicGain.gain.value = 0.27;
+      this.musicGain.gain.value = 0.2;
       this.musicGain.connect(this.masterGain);
     }
     if (this.context.state === 'suspended') void this.context.resume();
@@ -54,7 +65,7 @@ export class AudioEngine {
       this.musicTimer = null;
     } else {
       const context = this.ensure();
-      if (this.masterGain && context) this.masterGain.gain.setTargetAtTime(0.72, context.currentTime, 0.04);
+      if (this.masterGain && context) this.masterGain.gain.setTargetAtTime(0.62, context.currentTime, 0.04);
       this.musicStarted = false;
       this.startMusic();
     }
@@ -67,7 +78,7 @@ export class AudioEngine {
 
   private tone(frequency: number, duration: number, gain: number, type: OscillatorType, slide = 0): void {
     const context = this.ensure();
-    if (!context || !this.masterGain) return;
+    if (!context || !this.sfxGain) return;
     const oscillator = context.createOscillator();
     const envelope = context.createGain();
     oscillator.type = type;
@@ -76,7 +87,7 @@ export class AudioEngine {
     envelope.gain.setValueAtTime(0.0001, context.currentTime);
     envelope.gain.exponentialRampToValueAtTime(gain, context.currentTime + 0.012);
     envelope.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
-    this.connectEnvelope(envelope, this.masterGain);
+    this.connectEnvelope(envelope, this.sfxGain);
     oscillator.connect(envelope);
     oscillator.start();
     oscillator.stop(context.currentTime + duration + 0.02);
@@ -120,7 +131,7 @@ export class AudioEngine {
 
   private noiseBurst(duration: number, gain: number, highpass = 900): void {
     const context = this.ensure();
-    if (!context || !this.masterGain) return;
+    if (!context || !this.sfxGain) return;
     const length = Math.max(1, Math.floor(context.sampleRate * duration));
     const buffer = context.createBuffer(1, length, context.sampleRate);
     const data = buffer.getChannelData(0);
@@ -136,19 +147,22 @@ export class AudioEngine {
     envelope.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
     source.connect(filter);
     filter.connect(envelope);
-    envelope.connect(this.masterGain);
+    envelope.connect(this.sfxGain);
     source.start();
     source.stop(context.currentTime + duration + 0.01);
   }
 
   lightning(): void {
-    this.tone(240, 0.14, 0.035, 'sawtooth', 480);
-    this.tone(710, 0.07, 0.018, 'triangle', -240);
-    this.noiseBurst(0.08, 0.018, 1400);
+    // Keep the electrical snap inside the SFX bus. A softer triangle body and
+    // restrained noise preserve impact without the sawtooth peaks clipping
+    // when several chain segments discharge in the same frame.
+    this.tone(184, 0.13, 0.018, 'triangle', 260);
+    this.tone(560, 0.075, 0.009, 'sine', -150);
+    this.noiseBurst(0.055, 0.006, 1700);
   }
 
   hit(critical = false): void {
-    this.tone(critical ? 660 : 410, critical ? 0.1 : 0.07, critical ? 0.035 : 0.022, 'square', critical ? 260 : -90);
+    this.tone(critical ? 620 : 360, critical ? 0.09 : 0.06, critical ? 0.018 : 0.009, 'triangle', critical ? 220 : -70);
   }
 
   death(): void {
@@ -171,6 +185,6 @@ export class AudioEngine {
   }
 
   hurt(): void {
-    this.tone(110, 0.13, 0.04, 'sawtooth', -25);
+    this.tone(110, 0.13, 0.018, 'triangle', -25);
   }
 }

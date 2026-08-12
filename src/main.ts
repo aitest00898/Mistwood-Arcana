@@ -2,7 +2,7 @@ import './styles.css';
 import { AudioEngine } from './audio';
 import { ArtAssets, ENEMIES, HEROES, enemyDefinition, heroDefinition } from './assets';
 import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './config';
-import { drawEnemy, drawOrb, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
+import { drawEnemy, drawOrb, drawOrbitalRing, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
 import { InputManager } from './input';
 import { direction16FromVector } from './directions';
 import { applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
@@ -103,6 +103,10 @@ class MistwoodGame {
     requestAnimationFrame(this.frame);
   }
 
+  assetReady(): Promise<void> {
+    return this.assets.ready;
+  }
+
   private reset = (): void => {
     this.state = 'PLAYING';
     this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, HEROES[this.selectedHeroIndex].id);
@@ -180,8 +184,8 @@ class MistwoodGame {
   }
 
   private startRun = (): void => {
-    // Full-body master art is loaded progressively; directional gameplay art is
-    // the only asset gate required to begin a run.
+    // The run is gated on the same clean directional sprite set used by the
+    // selector, so no low-resolution character can appear mid-transition.
     if (!this.assets.isReady) return;
     this.audio.startMusic();
     this.reset();
@@ -197,20 +201,32 @@ class MistwoodGame {
 
   private resize = (): void => {
     const shell = document.getElementById('game-shell');
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const portraitPhone = viewportWidth < 700 && viewportHeight > viewportWidth;
+    const scale = portraitPhone
+      ? Math.max(viewportWidth / GAME_WIDTH, viewportHeight / GAME_HEIGHT)
+      : Math.min(viewportWidth / GAME_WIDTH, viewportHeight / GAME_HEIGHT);
+    const drawWidth = GAME_WIDTH * scale;
+    const drawHeight = GAME_HEIGHT * scale;
     if (shell) {
-      const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const availableWidth = Math.max(240, viewportWidth - 2);
-      const availableHeight = Math.max(342, viewportHeight - 2);
-      const maxWidth = Math.min(availableWidth, availableHeight * (GAME_WIDTH / GAME_HEIGHT));
-      shell.style.width = `${maxWidth}px`;
-      shell.style.height = `${maxWidth * (GAME_HEIGHT / GAME_WIDTH)}px`;
+      shell.style.width = `${viewportWidth}px`;
+      shell.style.height = `${viewportHeight}px`;
     }
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.floor(GAME_WIDTH * dpr);
-    this.canvas.height = Math.floor(GAME_HEIGHT * dpr);
+    this.canvas.style.width = `${drawWidth}px`;
+    this.canvas.style.height = `${drawHeight}px`;
+    this.canvas.style.left = `${(viewportWidth - drawWidth) / 2}px`;
+    this.canvas.style.top = `${(viewportHeight - drawHeight) / 2}px`;
+    this.canvas.width = Math.floor(drawWidth * dpr);
+    this.canvas.height = Math.floor(drawHeight * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = true;
+    const visibleWidth = viewportWidth / scale;
+    const visibleHeight = viewportHeight / scale;
+    const cropLeft = Math.max(0, (GAME_WIDTH - visibleWidth) / 2);
+    const cropTop = Math.max(0, (GAME_HEIGHT - visibleHeight) / 2);
+    this.ui.setViewport(cropLeft, Math.min(GAME_WIDTH, cropLeft + visibleWidth), cropTop, Math.min(GAME_HEIGHT, cropTop + visibleHeight));
   };
 
   private frame = (timestamp: number): void => {
@@ -276,7 +292,7 @@ class MistwoodGame {
     this.elapsed += dt;
     this.player.invulnerable = Math.max(0, this.player.invulnerable - dt);
     this.player.hitFlash = Math.max(0, this.player.hitFlash - dt);
-    this.player.orbitAngle += dt * 0.72;
+    this.player.orbitAngle += dt * 0.95;
     this.updatePlayer(dt);
     this.updateCamera(dt);
     this.enemyTimer -= dt;
@@ -563,10 +579,11 @@ class MistwoodGame {
     const positions: OrbPosition[] = [];
     for (let i = 0; i < this.stats.orbCount; i += 1) {
       const angle = this.player.orbitAngle + (Math.PI * 2 * i) / this.stats.orbCount;
-      const radius = 42 + Math.sin(this.elapsed * 2.7 + i) * 3.5;
+      const radiusX = 68 + Math.sin(this.elapsed * 2.7 + i) * 3.5;
+      const radiusY = 39 + Math.sin(this.elapsed * 2.1 + i * 0.7) * 2.2;
       positions.push({
-        x: this.player.x + Math.cos(angle) * radius,
-        y: this.player.y + Math.sin(angle) * radius - 1,
+        x: this.player.x + Math.cos(angle) * radiusX,
+        y: this.player.y - 25 + Math.sin(angle) * radiusY,
         pulse: i * 1.6,
       });
     }
@@ -695,8 +712,11 @@ class MistwoodGame {
       if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
       for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
       for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time, this.assets);
+      const orbs = this.getOrbPositions();
+      drawOrbitalRing(ctx, this.player.x, this.player.y - 25, 76, 45, time);
+      for (const orb of orbs) if (orb.y < this.player.y - 20) drawOrb(ctx, orb, time);
       drawPlayer(ctx, this.player, time, this.assets);
-      for (const orb of this.getOrbPositions()) drawOrb(ctx, orb, time);
+      for (const orb of orbs) if (orb.y >= this.player.y - 20) drawOrb(ctx, orb, time);
       for (const particle of this.particles) drawParticle(ctx, particle);
       for (const lightning of this.lightnings) this.drawLightning(ctx, lightning, time);
       this.drawDamageTexts(ctx);
@@ -832,7 +852,12 @@ const drawFlash = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: 
 const canvas = document.getElementById('game-canvas');
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Game canvas was not found');
 const loading = document.getElementById('loading');
-if (loading) window.setTimeout(() => loading.remove(), 700);
 const game = new MistwoodGame(canvas);
+if (loading) {
+  void game.assetReady().finally(() => {
+    loading.style.opacity = '0';
+    window.setTimeout(() => loading.remove(), 320);
+  });
+}
 registerPwa();
 game.start();

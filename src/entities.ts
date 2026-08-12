@@ -38,7 +38,7 @@ export const makePlayer = (x: number, y: number, heroId: HeroId = 'aether-mage')
   hitFlash: 0,
   invulnerable: 0,
   kills: 0,
-  orbitAngle: -Math.PI / 2,
+  orbitAngle: 0,
   heroId,
 });
 
@@ -68,73 +68,43 @@ export const makeEnemy = (id: number, x: number, y: number, kind: EnemyKind, dif
 };
 
 export const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, time: number, assets?: ArtAssets): void => {
-  if (assets?.isReady) {
-    drawSoftEllipse(ctx, player.x + 5, player.y + 17, 24, 8, '#071b1f', 0.62);
-    assets.drawHeroSprite(ctx, heroDefinition(player.heroId), player, time);
-    return;
-  }
-  const bob = Math.sin(time * 0.004 + player.bob) * 2.1;
-  const sway = Math.sin(time * 0.0032 + player.bob * 2) * 0.8;
-  ctx.save();
-  drawSoftEllipse(ctx, player.x + 5, player.y + 16, 22, 8, '#061b1b', 0.64);
-  ctx.translate(player.x + sway, player.y + bob);
-  ctx.scale(player.facing < 0 ? -1 : 1, 1);
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.fillStyle = '#d9e7ef';
-  ctx.strokeStyle = '#101e32';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-12, 8);
-  ctx.quadraticCurveTo(-13, -5, -8, -13);
-  ctx.quadraticCurveTo(-5, -21, 2, -22);
-  ctx.quadraticCurveTo(10, -20, 11, -11);
-  ctx.quadraticCurveTo(15, -1, 12, 10);
-  ctx.quadraticCurveTo(7, 16, 1, 12);
-  ctx.quadraticCurveTo(-4, 17, -9, 11);
-  ctx.closePath();
-  const robe = ctx.createLinearGradient(0, -22, 0, 14);
-  robe.addColorStop(0, '#fbffff');
-  robe.addColorStop(0.48, '#eef5f5');
-  robe.addColorStop(1, '#9ab8c8');
-  ctx.fillStyle = robe;
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#aacbe0';
-  ctx.beginPath();
-  ctx.moveTo(6, -18);
-  ctx.lineTo(15, -23);
-  ctx.lineTo(11, -10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#f8ffff';
-  ctx.beginPath();
-  ctx.ellipse(-2, -5, 8, 7, -0.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#23324a';
-  ctx.lineWidth = 1.8;
-  ctx.stroke();
-  ctx.fillStyle = '#24324e';
-  ctx.beginPath();
-  ctx.arc(-5, -5, 1.35, 0, Math.PI * 2);
-  ctx.arc(1.5, -5.2, 1.35, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#496578';
-  ctx.lineWidth = 1.3;
-  ctx.beginPath();
-  ctx.moveTo(-10, -1);
-  ctx.lineTo(-15, 3);
-  ctx.moveTo(9, 0);
-  ctx.lineTo(14, 4);
-  ctx.stroke();
+  if (!assets?.isReady) return;
+  drawSoftEllipse(ctx, player.x + 5, player.y + 17, 24, 8, '#071b1f', 0.62);
+  assets.drawHeroSprite(ctx, heroDefinition(player.heroId), player, time);
   if (player.hitFlash > 0) {
-    ctx.globalAlpha = Math.min(0.7, player.hitFlash * 2);
-    ctx.fillStyle = '#ffffff';
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = Math.min(0.55, player.hitFlash * 2.2);
+    ctx.fillStyle = '#effff7';
     ctx.beginPath();
-    ctx.arc(0, -5, 19, 0, Math.PI * 2);
+    ctx.arc(player.x, player.y - 38, 24, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
+};
+
+export const drawOrbitalRing = (ctx: CanvasRenderingContext2D, x: number, y: number, radiusX: number, radiusY: number, time: number): void => {
+  const phase = time * 0.0007;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.22;
+  ctx.strokeStyle = '#75e7da';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.58;
+  ctx.lineWidth = 1.1;
+  ctx.strokeStyle = '#ccebd0';
+  ctx.beginPath();
+  ctx.arc(0, 0, radiusX, phase, phase + 0.7);
+  ctx.stroke();
+  ctx.strokeStyle = '#b99558';
+  ctx.globalAlpha = 0.46;
+  ctx.beginPath();
+  ctx.arc(0, 0, radiusX * 0.84, phase + Math.PI, phase + Math.PI + 0.5);
+  ctx.stroke();
   ctx.restore();
 };
 

@@ -24,26 +24,27 @@ body {
 }
 
 body {
-  display: grid;
-  place-items: center;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  position: relative;
+  padding: 0;
 }
 
 #game-shell {
   position: relative;
-  flex: 0 0 auto;
+  width: 100vw;
+  height: 100dvh;
   overflow: hidden;
-  background: #081411;
-  box-shadow: 0 0 0 1px rgba(126, 214, 188, .12), 0 26px 80px rgba(0, 0, 0, .72);
-  aspect-ratio: 512 / 728;
-  max-width: 100%;
-  max-height: 100%;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(36, 84, 56, .58), transparent 48%),
+    linear-gradient(145deg, #102c22 0%, #061511 54%, #020807 100%);
+  box-shadow: inset 0 0 0 1px rgba(126, 214, 188, .12);
 }
 
 #game-canvas {
+  position: absolute;
   display: block;
-  width: 100%;
-  height: 100%;
+  max-width: none;
+  max-height: none;
+  transform: none;
   touch-action: none;
   image-rendering: auto;
 }
@@ -54,7 +55,7 @@ body {
   display: grid;
   place-items: center;
   color: rgba(235, 255, 245, .82);
-  background: #0b3026;
+  background: radial-gradient(circle at 50% 44%, rgba(38, 86, 61, .92), rgba(3, 15, 12, .98) 72%);
   letter-spacing: .16em;
   font-size: 13px;
   pointer-events: none;
@@ -71,6 +72,8 @@ body {
 @media (min-width: 700px) {
   #game-shell {
     border-radius: 18px;
+    width: 100vw;
+    height: 100dvh;
   }
 }
 
