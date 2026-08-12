@@ -1,5 +1,6 @@
 export type GameState = 'CHARACTER_SELECT' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER';
 export type HeroId = 'aether-mage' | 'holy-spellblade' | 'mistwood-ranger';
+export type Direction16 = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 export type EnemyKind =
   | 'mistSlime'
   | 'sproutSlime'
@@ -37,6 +38,7 @@ export interface Player {
   xpToNext: number;
   level: number;
   facing: number;
+  facing16: Direction16;
   bob: number;
   hitFlash: number;
   invulnerable: number;
@@ -93,6 +95,7 @@ export interface HeroDefinition {
   magicTheme: string;
   palette: string[];
   masterArt: string;
+  directionalAtlas: string;
   spriteIndex: number;
 }
 

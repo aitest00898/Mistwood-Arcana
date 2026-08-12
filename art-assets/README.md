@@ -2,6 +2,24 @@
 
 這個資料夾收納《霧林秘典 · Mistwood Arcana》目前使用的原創美術素材。
 
+## 16 向英雄 runtime 系統
+
+`characters/source/hero-16-direction-reference.jpg` 是本次附上的英雄方向板原始來源，
+規格為 8 欄 × 6 列；每位英雄佔連續兩列、共 16 個 gameplay view：
+
+- Aether Mage：第 0–1 列
+- Holy Spellblade：第 2–3 列
+- Mistwood Ranger：第 4–5 列
+
+`scripts/prepare-hero-16.mjs` 會去除連通的白色背景、裁切單一方向、統一落地錨點，
+並在每位英雄的 `runtime/` 產生 16 張獨立 PNG 與 4×4 的
+`directional-atlas.png`。瀏覽器只載入 `public/assets/characters/<hero>/directional-atlas.png`，
+不會在遊戲中直接載入整張概念板。
+
+方向槽位使用 `d00`–`d15`：`d00` 是朝向鏡頭／畫面下方，之後以順時針每 22.5° 遞增。
+移動本身仍然是連續類比向量，只有顯示 sprite 量化到最近方向；輸入低於 dead zone 時保留最後一次有效方向。
+新增英雄時，於 `HEROES` 加入對應 atlas path，維持 4×4、192×192 tile 契約，並更新 PWA shell 清單即可。
+
 ## Art direction reset
 
 - `ART-DIRECTION.md`：英雄比例、材質、光源、敵人剪影與生成提示錨點。

@@ -12,6 +12,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '閃電 · 以太 · 軌道魔法',
     palette: ['#172d63', '#f7f2df', '#bd9250', '#43e8ff'],
     masterArt: 'characters/aether-mage-master.png',
+    directionalAtlas: 'characters/aether-mage/directional-atlas.png',
     spriteIndex: 0,
   },
   {
@@ -23,6 +24,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '祝福 · 輻光 · 聖擊',
     palette: ['#f7f3e4', '#6b84c7', '#c9a150', '#8ce9ff'],
     masterArt: 'characters/holy-spellblade-master.png',
+    directionalAtlas: 'characters/holy-spellblade/directional-atlas.png',
     spriteIndex: 1,
   },
   {
@@ -34,6 +36,7 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '森靈 · 旋風 · 幽霧',
     palette: ['#1e493b', '#282923', '#8b6942', '#88c9a0'],
     masterArt: 'characters/mistwood-ranger-master.png',
+    directionalAtlas: 'characters/mistwood-ranger/directional-atlas.png',
     spriteIndex: 2,
   },
 ];
@@ -73,18 +76,24 @@ export class ArtAssets {
   readonly ready: Promise<void>;
   private heroAtlas: HTMLImageElement | null = null;
   private enemyAtlas: HTMLImageElement | null = null;
+  private readonly directionalAtlases = new Map<HeroId, HTMLImageElement>();
   private readonly masters = new Map<HeroId, HTMLImageElement>();
 
   constructor() {
     this.ready = Promise.all([
       loadImage('characters/hero-gameplay-atlas.png'),
       loadImage('enemies/enemy-atlas.png'),
+      ...HEROES.map((hero) => loadImage(hero.directionalAtlas)),
       ...HEROES.map((hero) => loadImage(hero.masterArt)),
-    ]).then(([heroAtlas, enemyAtlas, ...masters]) => {
+    ]).then((images) => {
+      const heroAtlas = images[0];
+      const enemyAtlas = images[1];
       this.heroAtlas = heroAtlas;
       this.enemyAtlas = enemyAtlas;
       HEROES.forEach((hero, index) => {
-        const master = masters[index];
+        const directionalAtlas = images[2 + index];
+        const master = images[2 + HEROES.length + index];
+        if (directionalAtlas) this.directionalAtlases.set(hero.id, directionalAtlas);
         if (master) this.masters.set(hero.id, master);
       });
     });
@@ -95,22 +104,33 @@ export class ArtAssets {
   }
 
   get isReady(): boolean {
-    return Boolean(this.heroAtlas && this.enemyAtlas);
+    return Boolean(this.enemyAtlas && this.directionalAtlases.size === HEROES.length);
   }
 
   drawHeroSprite(ctx: CanvasRenderingContext2D, hero: HeroDefinition, player: Player, time: number): void {
-    if (!this.heroAtlas) return;
-    const cellWidth = this.heroAtlas.width / 3;
-    const cellHeight = this.heroAtlas.height;
+    const directionalAtlas = this.directionalAtlases.get(hero.id);
     const bob = Math.sin(time * 0.004 + player.bob) * 2.2;
     const sway = Math.sin(time * 0.003 + player.bob * 1.7) * 0.035;
     const width = 58;
-    const height = 90;
+    const height = 82;
     ctx.save();
     ctx.translate(player.x, player.y + bob);
-    ctx.scale((player.facing < 0 ? -1 : 1) * (1 + sway), 1 - sway * 0.25);
+    ctx.scale(1 + sway, 1 - sway * 0.25);
     ctx.globalAlpha = player.invulnerable > 0 ? 0.82 + Math.sin(time * 0.04) * 0.12 : 1;
-    ctx.drawImage(this.heroAtlas, hero.spriteIndex * cellWidth, 0, cellWidth, cellHeight, -width / 2, -height * 0.78, width, height);
+    if (directionalAtlas) {
+      const cells = 4;
+      const cellWidth = directionalAtlas.width / cells;
+      const cellHeight = directionalAtlas.height / cells;
+      const direction = Math.max(0, Math.min(15, player.facing16));
+      const column = direction % cells;
+      const row = Math.floor(direction / cells);
+      ctx.drawImage(directionalAtlas, column * cellWidth, row * cellHeight, cellWidth, cellHeight, -width / 2, -height + 4, width, height);
+    } else if (this.heroAtlas) {
+      const cellWidth = this.heroAtlas.width / 3;
+      const cellHeight = this.heroAtlas.height;
+      ctx.scale(player.facing < 0 ? -1 : 1, 1);
+      ctx.drawImage(this.heroAtlas, hero.spriteIndex * cellWidth, 0, cellWidth, cellHeight, -width / 2, -height * 0.78, width, height);
+    }
     ctx.restore();
   }
 

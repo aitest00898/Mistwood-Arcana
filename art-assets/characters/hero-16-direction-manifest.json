@@ -1,0 +1,124 @@
+{
+  "source": "art-assets/characters/source/hero-16-direction-reference.jpg",
+  "sourceDimensions": {
+    "width": 1254,
+    "height": 1254
+  },
+  "sourceGrid": {
+    "columns": 8,
+    "rows": 6
+  },
+  "sourceRowBounds": [
+    0,
+    198,
+    407,
+    617,
+    827,
+    1039,
+    1254
+  ],
+  "runtimeGrid": {
+    "columns": 4,
+    "rows": 4
+  },
+  "runtimeTile": 192,
+  "directionOrder": [
+    "d00",
+    "d01",
+    "d02",
+    "d03",
+    "d04",
+    "d05",
+    "d06",
+    "d07",
+    "d08",
+    "d09",
+    "d10",
+    "d11",
+    "d12",
+    "d13",
+    "d14",
+    "d15"
+  ],
+  "directionConvention": "d00 is camera-facing/down; slots advance clockwise in 22.5 degree sectors. The supplied sheet is read left-to-right across the first row, then left-to-right across the second row for each hero.",
+  "heroes": [
+    {
+      "id": "aether-mage",
+      "sourceRows": [
+        0,
+        1
+      ],
+      "runtimeAtlas": "characters/aether-mage/directional-atlas.png",
+      "runtimeDirections": [
+        "characters/aether-mage/directions/d00.png",
+        "characters/aether-mage/directions/d01.png",
+        "characters/aether-mage/directions/d02.png",
+        "characters/aether-mage/directions/d03.png",
+        "characters/aether-mage/directions/d04.png",
+        "characters/aether-mage/directions/d05.png",
+        "characters/aether-mage/directions/d06.png",
+        "characters/aether-mage/directions/d07.png",
+        "characters/aether-mage/directions/d08.png",
+        "characters/aether-mage/directions/d09.png",
+        "characters/aether-mage/directions/d10.png",
+        "characters/aether-mage/directions/d11.png",
+        "characters/aether-mage/directions/d12.png",
+        "characters/aether-mage/directions/d13.png",
+        "characters/aether-mage/directions/d14.png",
+        "characters/aether-mage/directions/d15.png"
+      ]
+    },
+    {
+      "id": "holy-spellblade",
+      "sourceRows": [
+        2,
+        3
+      ],
+      "runtimeAtlas": "characters/holy-spellblade/directional-atlas.png",
+      "runtimeDirections": [
+        "characters/holy-spellblade/directions/d00.png",
+        "characters/holy-spellblade/directions/d01.png",
+        "characters/holy-spellblade/directions/d02.png",
+        "characters/holy-spellblade/directions/d03.png",
+        "characters/holy-spellblade/directions/d04.png",
+        "characters/holy-spellblade/directions/d05.png",
+        "characters/holy-spellblade/directions/d06.png",
+        "characters/holy-spellblade/directions/d07.png",
+        "characters/holy-spellblade/directions/d08.png",
+        "characters/holy-spellblade/directions/d09.png",
+        "characters/holy-spellblade/directions/d10.png",
+        "characters/holy-spellblade/directions/d11.png",
+        "characters/holy-spellblade/directions/d12.png",
+        "characters/holy-spellblade/directions/d13.png",
+        "characters/holy-spellblade/directions/d14.png",
+        "characters/holy-spellblade/directions/d15.png"
+      ]
+    },
+    {
+      "id": "mistwood-ranger",
+      "sourceRows": [
+        4,
+        5
+      ],
+      "runtimeAtlas": "characters/mistwood-ranger/directional-atlas.png",
+      "runtimeDirections": [
+        "characters/mistwood-ranger/directions/d00.png",
+        "characters/mistwood-ranger/directions/d01.png",
+        "characters/mistwood-ranger/directions/d02.png",
+        "characters/mistwood-ranger/directions/d03.png",
+        "characters/mistwood-ranger/directions/d04.png",
+        "characters/mistwood-ranger/directions/d05.png",
+        "characters/mistwood-ranger/directions/d06.png",
+        "characters/mistwood-ranger/directions/d07.png",
+        "characters/mistwood-ranger/directions/d08.png",
+        "characters/mistwood-ranger/directions/d09.png",
+        "characters/mistwood-ranger/directions/d10.png",
+        "characters/mistwood-ranger/directions/d11.png",
+        "characters/mistwood-ranger/directions/d12.png",
+        "characters/mistwood-ranger/directions/d13.png",
+        "characters/mistwood-ranger/directions/d14.png",
+        "characters/mistwood-ranger/directions/d15.png"
+      ]
+    }
+  ]
+}

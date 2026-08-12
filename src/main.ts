@@ -4,6 +4,7 @@ import { ArtAssets, ENEMIES, HEROES, enemyDefinition, heroDefinition } from './a
 import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './config';
 import { drawEnemy, drawOrb, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
 import { InputManager } from './input';
+import { direction16FromVector } from './directions';
 import { applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
 import type { DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
 import { GameUI } from './ui';
@@ -171,7 +172,10 @@ class MistwoodGame {
     const targetVy = direction.y * speed;
     this.player.vx = lerp(this.player.vx, targetVx, 1 - Math.exp(-dt * 14));
     this.player.vy = lerp(this.player.vy, targetVy, 1 - Math.exp(-dt * 14));
-    if (Math.hypot(direction.x, direction.y) > 0.05) this.player.facing = direction.x < -0.1 ? -1 : direction.x > 0.1 ? 1 : this.player.facing;
+    if (Math.hypot(direction.x, direction.y) > 0.05) {
+      this.player.facing16 = direction16FromVector(direction.x, direction.y, this.player.facing16);
+      this.player.facing = direction.x < -0.1 ? -1 : direction.x > 0.1 ? 1 : this.player.facing;
+    }
     const next = this.world.resolveCircle({ x: this.player.x + this.player.vx * dt, y: this.player.y + this.player.vy * dt }, PLAYER_RADIUS);
     this.player.x = next.x;
     this.player.y = next.y;
@@ -553,7 +557,7 @@ class MistwoodGame {
       this.drawDamageTexts(ctx);
       ctx.restore();
     }
-    this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug, heroDefinition(this.player.heroId).name);
+    this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug, heroDefinition(this.player.heroId).name, this.player.facing16);
     if (this.state !== 'CHARACTER_SELECT') this.ui.drawJoystick(ctx, (drawContext) => this.input.drawJoystick(drawContext));
     if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady && this.assets.masterCount === HEROES.length);
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);

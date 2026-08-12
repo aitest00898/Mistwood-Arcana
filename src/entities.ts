@@ -33,6 +33,7 @@ export const makePlayer = (x: number, y: number, heroId: HeroId = 'aether-mage')
   xpToNext: 12,
   level: 1,
   facing: 1,
+  facing16: 0,
   bob: 0,
   hitFlash: 0,
   invulnerable: 0,

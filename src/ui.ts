@@ -1,9 +1,10 @@
 import { COLORS, FONT, GAME_HEIGHT, GAME_WIDTH, MONO_FONT, RARITY_COLORS } from './config';
-import type { GameState, HeroDefinition, OrbPosition, Player, Rarity, Stats, UpgradeCard } from './types';
+import type { Direction16, GameState, HeroDefinition, OrbPosition, Player, Rarity, Stats, UpgradeCard } from './types';
 import type { ArtAssets } from './assets';
 import { drawSkillGlyph } from './entities';
 import { clamp, drawGlow, hexToRgba, polygonPath, roundRectPath } from './utils';
 import { skillLevel } from './upgrades';
+import { direction16Label } from './directions';
 
 export interface UiCallbacks {
   onMute: () => void;
@@ -45,14 +46,14 @@ export class GameUI {
     this.selectionFlash = Math.max(0, this.selectionFlash - dt * 5);
   }
 
-  drawHud(ctx: CanvasRenderingContext2D, state: GameState, player: Player, stats: Stats, orbPositions: OrbPosition[], elapsed: number, muted: boolean, debug: boolean, heroName = '安妮妮'): void {
+  drawHud(ctx: CanvasRenderingContext2D, state: GameState, player: Player, stats: Stats, orbPositions: OrbPosition[], elapsed: number, muted: boolean, debug: boolean, heroName = '安妮妮', facing16 = 0): void {
     if (state === 'PLAYING' || state === 'LEVEL_UP' || state === 'GAME_OVER') {
       this.drawXpBar(ctx, player);
       this.drawStatusBar(ctx, player, stats, heroName);
       this.drawSkillNetwork(ctx, stats, orbPositions);
       this.drawMuteButton(ctx, muted);
     }
-    if (debug) this.drawDebug(ctx, player, stats);
+    if (debug) this.drawDebug(ctx, player, stats, facing16);
   }
 
   drawJoystick(ctx: CanvasRenderingContext2D, inputDraw: (ctx: CanvasRenderingContext2D) => void): void {
@@ -391,12 +392,13 @@ export class GameUI {
     ctx.restore();
   }
 
-  private drawDebug(ctx: CanvasRenderingContext2D, player: Player, stats: Stats): void {
+  private drawDebug(ctx: CanvasRenderingContext2D, player: Player, stats: Stats, facing16: number): void {
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,.45)';
     ctx.font = `9px ${MONO_FONT}`;
     ctx.textAlign = 'left';
-    ctx.fillText(`DEBUG  hp:${player.hp.toFixed(0)}  orb:${stats.orbCount}  chain:${stats.chainCount}`, 8, 18);
+    const normalizedFacing = Math.max(0, Math.min(15, facing16)) as Direction16;
+    ctx.fillText(`DEBUG  hp:${player.hp.toFixed(0)}  orb:${stats.orbCount}  chain:${stats.chainCount}  hero:${player.heroId}  ${direction16Label(normalizedFacing)}`, 8, 18);
     ctx.restore();
   }
 

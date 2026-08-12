@@ -1,13 +1,21 @@
 {
   "project": "Mistwood Arcana",
-  "version": 2,
-  "source": "Original assets generated for this project with the built-in image generation workflow and locally chroma-key processed where runtime transparency is required.",
+  "version": 3,
+  "source": "Original project art plus the user-supplied 16-direction hero reference sheet, locally cropped and connected-background processed for runtime transparency.",
   "runtime": {
-    "heroAtlas": {
+    "legacyHeroAtlas": {
       "path": "public/assets/characters/hero-gameplay-atlas.png",
       "dimensions": "1536x1024",
       "cells": 3,
       "usage": "one front 3/4 gameplay sprite per hero"
+    },
+    "heroDirectionalAtlases": {
+      "source": "characters/source/hero-16-direction-reference.jpg",
+      "sourceGrid": "8x6",
+      "runtimeGrid": "4x4 per hero",
+      "tileDimensions": "192x192",
+      "directionOrder": "d00-d07 first source row, d08-d15 second source row",
+      "directionConvention": "d00 camera-facing/down, clockwise 22.5 degree sectors"
     },
     "enemyAtlas": {
       "path": "public/assets/enemies/enemy-atlas.png",
@@ -17,9 +25,9 @@
     }
   },
   "heroes": [
-    { "id": "aether-mage", "master": "characters/aether-mage/concept/aether-mage-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "runtimeIndex": 0, "palette": ["#172d63", "#f7f2df", "#bd9250", "#43e8ff"] },
-    { "id": "holy-spellblade", "master": "characters/holy-spellblade/concept/holy-spellblade-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "runtimeIndex": 1, "palette": ["#f7f3e4", "#6b84c7", "#c9a150", "#8ce9ff"] },
-    { "id": "mistwood-ranger", "master": "characters/mistwood-ranger/concept/mistwood-ranger-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "runtimeIndex": 2, "palette": ["#1e493b", "#282923", "#8b6942", "#88c9a0"] }
+    { "id": "aether-mage", "master": "characters/aether-mage/concept/aether-mage-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/aether-mage/runtime/directional-atlas.png", "sourceRows": [0, 1], "palette": ["#172d63", "#f7f2df", "#bd9250", "#43e8ff"] },
+    { "id": "holy-spellblade", "master": "characters/holy-spellblade/concept/holy-spellblade-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/holy-spellblade/runtime/directional-atlas.png", "sourceRows": [2, 3], "palette": ["#f7f3e4", "#6b84c7", "#c9a150", "#8ce9ff"] },
+    { "id": "mistwood-ranger", "master": "characters/mistwood-ranger/concept/mistwood-ranger-master.png", "turnaround": "characters/hero-turnaround-sheet.png", "directionalAtlas": "characters/mistwood-ranger/runtime/directional-atlas.png", "sourceRows": [4, 5], "palette": ["#1e493b", "#282923", "#8b6942", "#88c9a0"] }
   ],
   "enemies": [
     { "id": "mistSlime", "name": "霧凝膠", "atlasIndex": 0, "concept": "enemies/lineup/mistwood-enemy-concept-lineup.png" },

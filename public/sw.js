@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v6-art-reset';
+const CACHE_NAME = 'mistwood-arcana-shell-v7-hero16';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,
@@ -8,6 +8,9 @@ const APP_SHELL = [
   new URL('pwa/icon-512.png', APP_BASE).href,
   new URL('assets/forest-atmosphere.png', APP_BASE).href,
   new URL('assets/characters/hero-gameplay-atlas.png', APP_BASE).href,
+  new URL('assets/characters/aether-mage/directional-atlas.png', APP_BASE).href,
+  new URL('assets/characters/holy-spellblade/directional-atlas.png', APP_BASE).href,
+  new URL('assets/characters/mistwood-ranger/directional-atlas.png', APP_BASE).href,
   new URL('assets/characters/aether-mage-master.png', APP_BASE).href,
   new URL('assets/characters/holy-spellblade-master.png', APP_BASE).href,
   new URL('assets/characters/mistwood-ranger-master.png', APP_BASE).href,
