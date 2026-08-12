@@ -388,7 +388,7 @@ export class GameUI {
     ctx.textBaseline = 'middle';
     ctx.font = `11px ${FONT}`;
     ctx.fillStyle = 'rgba(221,247,235,.62)';
-    ctx.fillText('移動 · WASD / 觸控搖桿', GAME_WIDTH / 2, 70);
+    ctx.fillText('移動 · WASD / 全畫面觸控拖曳', GAME_WIDTH / 2, 70);
     ctx.restore();
   }
 
