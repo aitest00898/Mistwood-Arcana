@@ -519,9 +519,25 @@ export class AttackSystem {
       ctx.fillStyle = hexToRgba('#d4caff', 0.7 * alpha);
       for (let i = 0; i < 5; i += 1) {
         const angle = time * 0.001 + i * 1.2;
-        ctx.fillRect(Math.cos(angle) * field.radius * 0.55 - 2, Math.sin(angle) * field.radius * 0.28 - 2, 4, 4);
+        const stoneX = Math.cos(angle) * field.radius * 0.55;
+        const stoneY = Math.sin(angle) * field.radius * 0.28;
+        ctx.save();
+        ctx.translate(stoneX, stoneY);
+        ctx.rotate(angle * 1.8);
+        ctx.fillRect(-2.8, -2.8, 5.6, 5.6);
+        ctx.restore();
       }
+      ctx.globalAlpha = 0.7 * alpha;
+      ctx.strokeStyle = '#d7d0ff';
+      ctx.beginPath();
+      ctx.arc(0, 0, field.radius * 0.12, time * 0.002, time * 0.002 + Math.PI * 1.4);
+      ctx.stroke();
     } else if (field.kind === 'thorn') {
+      drawGlow(ctx, 0, 0, field.radius * 0.8, '#ffd77d', 0.18 * alpha);
+      ctx.fillStyle = hexToRgba('#86b86b', 0.16 * alpha);
+      ctx.beginPath();
+      ctx.arc(0, 0, field.radius * 0.78, 0, Math.PI * 2);
+      ctx.fill();
       ctx.strokeStyle = hexToRgba('#ffe6a0', 0.82 * alpha);
       ctx.lineWidth = 1.4;
       polygonPath(ctx, 8, field.radius);
@@ -530,8 +546,15 @@ export class AttackSystem {
         const angle = i * Math.PI / 4;
         ctx.beginPath();
         ctx.moveTo(Math.cos(angle) * 12, Math.sin(angle) * 12);
-        ctx.lineTo(Math.cos(angle) * field.radius, Math.sin(angle) * field.radius);
+        ctx.lineTo(Math.cos(angle) * field.radius * 0.82, Math.sin(angle) * field.radius * 0.82);
         ctx.stroke();
+        ctx.fillStyle = '#fff0b4';
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * field.radius, Math.sin(angle) * field.radius);
+        ctx.lineTo(Math.cos(angle - 0.12) * field.radius * 0.78, Math.sin(angle - 0.12) * field.radius * 0.78);
+        ctx.lineTo(Math.cos(angle + 0.12) * field.radius * 0.78, Math.sin(angle + 0.12) * field.radius * 0.78);
+        ctx.closePath();
+        ctx.fill();
       }
     } else if (field.kind === 'celestial') {
       ctx.globalCompositeOperation = 'source-over';
@@ -546,6 +569,14 @@ export class AttackSystem {
       ctx.beginPath();
       ctx.arc(0, 0, field.radius * 0.7, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = hexToRgba('#fff8da', 0.7 * (1 - alpha));
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -field.radius * 1.1);
+      ctx.lineTo(0, field.radius * 1.1);
+      ctx.moveTo(-field.radius * 1.1, 0);
+      ctx.lineTo(field.radius * 1.1, 0);
+      ctx.stroke();
     } else if (field.kind === 'prism') {
       const mirror = field.radius > 12;
       ctx.strokeStyle = hexToRgba(mirror ? '#d9e8ff' : '#a8efff', 0.8 * alpha);
@@ -560,6 +591,18 @@ export class AttackSystem {
         ctx.globalAlpha = 0.45 * alpha;
         ctx.fillStyle = '#c9e7ff';
         ctx.fillRect(-3, -36, 6, 72);
+        ctx.globalAlpha = 0.8 * alpha;
+        ctx.strokeStyle = '#f3fbff';
+        ctx.beginPath();
+        ctx.moveTo(-field.radius * 1.2, 0);
+        ctx.lineTo(field.radius * 1.2, 0);
+        ctx.stroke();
+      } else {
+        ctx.globalAlpha = 0.7 * alpha;
+        ctx.beginPath();
+        ctx.moveTo(-field.radius, field.radius * 0.3);
+        ctx.lineTo(field.radius, -field.radius * 0.3);
+        ctx.stroke();
       }
     } else if (field.kind === 'gale') {
       ctx.strokeStyle = hexToRgba('#b9f3c8', 0.82 * alpha);
@@ -570,6 +613,11 @@ export class AttackSystem {
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(0, 0, field.radius * 0.7, 0.8, 3.1);
+      ctx.stroke();
+      ctx.strokeStyle = hexToRgba('#f3ffe0', 0.6 * alpha);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, field.radius * 1.12, -0.65, 0.45);
       ctx.stroke();
     }
     ctx.restore();
@@ -639,31 +687,105 @@ export class AttackSystem {
   private drawProjectile(ctx: CanvasRenderingContext2D, projectile: Projectile, time: number): void {
     ctx.save();
     ctx.translate(projectile.x, projectile.y);
-    ctx.rotate(Math.atan2(projectile.vy, projectile.vx) + (projectile.kind === 'chakram' ? time * 0.012 : 0));
+    const directionX = projectile.kind === 'chakram' ? projectile.dirX ?? 1 : projectile.kind === 'javelin' ? (projectile.targetX ?? projectile.x) - projectile.x : projectile.vx;
+    const directionY = projectile.kind === 'chakram' ? projectile.dirY ?? 0 : projectile.kind === 'javelin' ? (projectile.targetY ?? projectile.y) - projectile.y : projectile.vy;
+    ctx.rotate(Math.atan2(directionY, directionX) + (projectile.kind === 'chakram' ? time * 0.012 : 0));
     ctx.globalCompositeOperation = 'lighter';
-    const length = projectile.kind === 'lance' ? 22 : projectile.kind === 'javelin' ? 17 : projectile.kind === 'chakram' ? 15 : 10;
-    drawGlow(ctx, 0, 0, length * 1.8, projectile.color, 0.6);
-    ctx.strokeStyle = projectile.color;
-    ctx.fillStyle = projectile.color;
-    ctx.lineWidth = projectile.kind === 'lance' ? 3.2 : 2;
-    if (projectile.kind === 'chakram') {
+    if (projectile.kind === 'lance') {
+      drawGlow(ctx, 0, 0, 44, '#55cfff', 0.56);
+      ctx.fillStyle = '#dffaff';
+      ctx.strokeStyle = '#6abfff';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(0, 0, 10, 0, Math.PI * 1.65);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, 0, 4, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(-length, 0);
-      ctx.lineTo(length, 0);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(length, 0);
-      ctx.lineTo(length - 7, -4);
-      ctx.lineTo(length - 7, 4);
+      ctx.moveTo(28, 0);
+      ctx.lineTo(7, -5.8);
+      ctx.lineTo(-26, -2.5);
+      ctx.lineTo(-18, 0);
+      ctx.lineTo(-26, 2.5);
+      ctx.lineTo(7, 5.8);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#2d7de8';
+      ctx.beginPath();
+      ctx.moveTo(28, 0);
+      ctx.lineTo(9, -3);
+      ctx.lineTo(9, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#eaffff';
+      ctx.beginPath();
+      ctx.moveTo(-18, -2);
+      ctx.lineTo(-34, -8);
+      ctx.moveTo(-18, 2);
+      ctx.lineTo(-34, 8);
+      ctx.stroke();
+    } else if (projectile.kind === 'javelin') {
+      drawGlow(ctx, 0, 0, 34, '#77c86c', 0.42);
+      ctx.strokeStyle = '#6e4729';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-24, 2);
+      ctx.lineTo(17, -1);
+      ctx.stroke();
+      ctx.fillStyle = '#d9e7a6';
+      ctx.strokeStyle = '#7fa655';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(27, 0);
+      ctx.lineTo(13, -7);
+      ctx.lineTo(17, 0);
+      ctx.lineTo(13, 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#69b36a';
+      ctx.beginPath();
+      ctx.ellipse(-12, -7, 7, 2.5, -0.35, 0, Math.PI * 2);
+      ctx.ellipse(-5, 7, 7, 2.5, 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (projectile.kind === 'star') {
+      drawGlow(ctx, 0, 0, 28, '#ffe47b', 0.62);
+      ctx.fillStyle = '#fff4b5';
+      ctx.strokeStyle = '#efb84e';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i += 1) {
+        const angle = -Math.PI / 2 + i * Math.PI / 5;
+        const radius = i % 2 === 0 ? 12 : 4.8;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#faffff';
+      ctx.beginPath();
+      ctx.moveTo(-17, -10);
+      ctx.lineTo(-25, -15);
+      ctx.moveTo(-18, 11);
+      ctx.lineTo(-27, 16);
+      ctx.stroke();
+    } else if (projectile.kind === 'chakram') {
+      drawGlow(ctx, 0, 0, 36, '#8fd9ff', 0.52);
+      ctx.strokeStyle = '#cceeff';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, -Math.PI * 0.82, Math.PI * 0.82);
+      ctx.stroke();
+      ctx.strokeStyle = '#d8ae62';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7, Math.PI * 0.18, Math.PI * 1.82);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-5, 0);
+      ctx.lineTo(0, -4);
+      ctx.lineTo(5, 0);
+      ctx.lineTo(0, 4);
+      ctx.closePath();
+      ctx.stroke();
     }
     ctx.restore();
   }

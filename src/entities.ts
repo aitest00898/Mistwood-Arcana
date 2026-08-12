@@ -68,7 +68,7 @@ export const makeEnemy = (id: number, x: number, y: number, kind: EnemyKind, dif
 };
 
 export const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, time: number, assets?: ArtAssets): void => {
-  if (!assets?.isReady) return;
+  if (!assets || !assets.isHeroReady(heroDefinition(player.heroId))) return;
   drawSoftEllipse(ctx, player.x + 5, player.y + 17, 24, 8, '#071b1f', 0.62);
   assets.drawHeroSprite(ctx, heroDefinition(player.heroId), player, time);
   if (player.hitFlash > 0) {
@@ -169,7 +169,7 @@ export const drawOrb = (ctx: CanvasRenderingContext2D, orb: OrbPosition, time: n
 };
 
 export const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy, time: number, assets?: ArtAssets): void => {
-  if (assets?.isReady) {
+  if (assets?.isEnemyReady()) {
     const definition = enemyDefinition(enemy.kind);
     drawSoftEllipse(ctx, enemy.x + 4, enemy.y + enemy.radius * 0.84, enemy.radius * definition.shadowScale, enemy.radius * definition.shadowScale * 0.32, '#061914', definition.elite ? 0.7 : 0.58);
     assets.drawEnemySprite(ctx, definition, enemy.x, enemy.y, enemy.radius, enemy.phase, time, enemy.hitFlash);
@@ -370,6 +370,34 @@ export const drawSkillGlyph = (ctx: CanvasRenderingContext2D, id: string, size: 
     ctx.beginPath();
     ctx.arc(0, size * 0.17, size * 0.16, 0, Math.PI * 2);
     ctx.fill();
+  } else if (id === 'vitality') {
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.72);
+    ctx.lineTo(-size * 0.58, size * 0.12);
+    ctx.bezierCurveTo(-size * 0.88, -size * 0.28, -size * 0.42, -size * 0.7, 0, -size * 0.28);
+    ctx.bezierCurveTo(size * 0.42, -size * 0.7, size * 0.88, -size * 0.28, size * 0.58, size * 0.12);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.05);
+    ctx.lineTo(0, size * 0.36);
+    ctx.moveTo(-size * 0.2, size * 0.15);
+    ctx.lineTo(size * 0.2, size * 0.15);
+    ctx.stroke();
+  } else if (id === 'fortitude') {
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.76);
+    ctx.lineTo(size * 0.63, -size * 0.46);
+    ctx.lineTo(size * 0.52, size * 0.32);
+    ctx.quadraticCurveTo(0, size * 0.82, -size * 0.52, size * 0.32);
+    ctx.lineTo(-size * 0.63, -size * 0.46);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.28, size * 0.02);
+    ctx.lineTo(-size * 0.05, size * 0.26);
+    ctx.lineTo(size * 0.36, -size * 0.25);
+    ctx.stroke();
   } else if (id === 'eclipseArc') {
     ctx.beginPath();
     ctx.arc(0, 0, size * 0.65, -Math.PI * 0.75, Math.PI * 0.75);

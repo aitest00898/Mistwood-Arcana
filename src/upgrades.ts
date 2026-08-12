@@ -1,6 +1,6 @@
 import { RARITY_COLORS } from './config';
 import { ATTACK_DEFINITIONS, attackDefinition } from './attacks';
-import type { AttackId, Rarity, SkillId, Stats, UpgradeCard } from './types';
+import type { AttackId, Player, Rarity, SkillId, Stats, UpgradeCard } from './types';
 
 export interface SkillDefinition {
   id: SkillId;
@@ -17,6 +17,8 @@ export const SKILLS: SkillDefinition[] = [
   { id: 'vortex', title: '亡靈旋風', description: '持續傷害時間增加', icon: 'vortex', baseValue: '30%' },
   { id: 'embrace', title: '魔法之擁', description: '增加法術傷害', icon: 'embrace', baseValue: '350%' },
   { id: 'blade', title: '巫師之刃', description: '暴擊傷害提高', icon: 'blade', baseValue: '330%' },
+  { id: 'vitality', title: '增加血量', description: '最大生命值提升，升級時完全恢復', icon: 'vitality', baseValue: '+18 最大生命' },
+  { id: 'fortitude', title: '增加防禦力', description: '受到的接觸傷害降低', icon: 'fortitude', baseValue: '傷害 -4%' },
 ];
 
 const RARITIES: Rarity[] = ['垃圾', '普通', '罕見!', '史詩!!', '傳說!!!'];
@@ -48,6 +50,8 @@ export const initialStats = (): Stats => ({
     vortex: 0,
     embrace: 0,
     blade: 0,
+    vitality: 0,
+    fortitude: 0,
   },
   ownedAttacks: ['lightning'],
   attackRanks: { lightning: 1 },
@@ -59,7 +63,9 @@ const valueFor = (id: SkillId, level: number): string => {
   if (id === 'ray') return `${105 + Math.max(0, level - 1) * 12}%`;
   if (id === 'vortex') return `${30 + Math.max(0, level - 1) * 9}%`;
   if (id === 'embrace') return `${350 + Math.max(0, level - 1) * 45}%`;
-  return `${330 + Math.max(0, level - 1) * 40}%`;
+  if (id === 'blade') return `${330 + Math.max(0, level - 1) * 40}%`;
+  if (id === 'vitality') return `+${18 + Math.max(0, level - 1) * 7} 最大生命`;
+  return `傷害 -${4 + Math.max(0, level - 1) * 1.5}%`;
 };
 
 const pickRarity = (level: number): Rarity => {
@@ -164,10 +170,29 @@ export const applyUpgrade = (stats: Stats, card: UpgradeCard): void => {
   } else if (skillId === 'embrace') {
     stats.orbDamageMultiplier += 0.22 * rarityBoost;
     stats.moveSpeedMultiplier += 0.025;
-  } else if (card.id === 'blade') {
+  } else if (skillId === 'blade') {
     stats.critMultiplier += 0.24 * rarityBoost;
-    stats.maxHpBonus += 3;
+  } else if (skillId === 'vitality') {
+    stats.maxHpBonus += (15 + level * 3) * rarityBoost;
+  } else if (skillId === 'fortitude') {
+    stats.damageReduction = Math.min(0.68, stats.damageReduction + 0.035 * rarityBoost);
   }
+};
+
+/**
+ * Every level grants a small, deterministic baseline growth in addition to
+ * the selected card. This keeps a run from becoming dependent on drawing the
+ * same passive repeatedly, while the full heal makes level-up a readable
+ * recovery moment instead of only a menu interruption.
+ */
+export const applyLevelGrowth = (stats: Stats, player: Player): void => {
+  const healthGrowth = 5 + Math.floor(player.level / 8);
+  player.maxHp += healthGrowth;
+  stats.baseDamage += 0.08 + player.level * 0.004;
+  stats.attackInterval = Math.max(0.42, stats.attackInterval - 0.006);
+  stats.pickupRadius += 2;
+  stats.damageReduction = Math.min(0.22, stats.damageReduction + 0.0035);
+  player.hp = player.maxHp + stats.maxHpBonus;
 };
 
 export const skillDefinition = (id: SkillId): SkillDefinition => skillMap.get(id) ?? SKILLS[0];

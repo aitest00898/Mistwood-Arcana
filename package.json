@@ -10,6 +10,7 @@
     "check": "npm run typecheck && npm run build",
     "prepare:hero16": "node scripts/prepare-hero-16.mjs",
     "prepare:selection-art": "node scripts/prepare-selection-art.mjs",
+    "prepare:runtime-webp": "node scripts/prepare-runtime-webp.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

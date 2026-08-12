@@ -110,6 +110,8 @@ export class GameUI {
     this.selectionLayout = layout;
     const allArtReady = heroes.every((item) => assets.isSelectionReady(item));
     const canStart = ready && allArtReady;
+    const loadingState = assets.loadingState;
+    const gameplayFailed = loadingState.complete && loadingState.failed > loadingState.selectionFailed;
     const accent = hero.palette[2];
     ctx.save();
     ctx.fillStyle = 'rgba(2, 11, 10, .91)';
@@ -160,7 +162,7 @@ export class GameUI {
       this.drawLoadingGlyph(ctx, rect.centerX, layout.cta.y + layout.cta.h / 2, '#a8d7c4', elapsed);
       ctx.fillStyle = '#bdd6ca';
       ctx.font = `600 11px ${FONT}`;
-      ctx.fillText('正在準備秘術素材…', rect.centerX, layout.cta.y + layout.cta.h / 2);
+      ctx.fillText(gameplayFailed ? '戰鬥素材載入失敗，請重新整理' : '正在準備秘術素材…', rect.centerX, layout.cta.y + layout.cta.h / 2);
     }
     ctx.restore();
   }

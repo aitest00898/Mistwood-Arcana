@@ -18,7 +18,7 @@ export class World {
   private readonly optimized = !new URLSearchParams(window.location.search).has('legacyWorld');
 
   constructor() {
-    this.atmosphere.src = `${import.meta.env.BASE_URL}assets/forest-atmosphere.png`;
+    this.atmosphere.src = `${import.meta.env.BASE_URL}assets/forest-atmosphere.webp`;
     this.atmosphere.onload = () => {
       this.atmosphereReady = true;
       this.buildBackground();

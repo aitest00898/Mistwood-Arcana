@@ -1,11 +1,12 @@
 import './styles.css';
 import { AudioEngine } from './audio';
 import { ArtAssets, ENEMIES, HEROES, enemyDefinition, heroDefinition } from './assets';
+import type { AssetLoadingState } from './assets';
 import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './config';
 import { drawEnemy, drawOrb, drawOrbitalRing, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
 import { InputManager } from './input';
 import { direction16FromVector } from './directions';
-import { applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
+import { applyLevelGrowth, applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
 import { ATTACK_DEFINITIONS, AttackSystem } from './attacks';
 import type { AttackId, DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, PerformanceSnapshot, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
 import { GameUI } from './ui';
@@ -44,6 +45,7 @@ class MistwoodGame {
   private readonly perfEnabled = new URLSearchParams(window.location.search).has('perf');
   private readonly perfStress = new URLSearchParams(window.location.search).get('perf') === 'stress';
   private readonly perfLightningOptimized = !new URLSearchParams(window.location.search).has('legacyLightning');
+  private readonly perfSeparationOptimized = !new URLSearchParams(window.location.search).has('legacySeparation');
   private readonly perfFrames: number[] = [];
   private perfFrameCount = 0;
   private perfElapsedMs = 0;
@@ -59,6 +61,10 @@ class MistwoodGame {
   private perfMaxLightnings = 0;
   private perfMaxPickups = 0;
   private perfMaxDamageTexts = 0;
+  private perfSeparationChecks = 0;
+  private perfSeparationChecksThisFrame = 0;
+  private perfMaxSeparationChecks = 0;
+  private readonly enemySpatialGrid = new Map<number, Enemy[]>();
   private readonly perfElement: HTMLElement | null;
   private orbPositions: OrbPosition[] = [];
   private orbPositionsElapsed = -1;
@@ -110,7 +116,7 @@ class MistwoodGame {
     return this.assets.ready;
   }
 
-  assetLoadingState(): { loaded: number; total: number; failed: number; complete: boolean; ready: boolean } {
+  assetLoadingState(): AssetLoadingState {
     return this.assets.loadingState;
   }
 
@@ -156,6 +162,9 @@ class MistwoodGame {
     this.perfMaxLightnings = 0;
     this.perfMaxPickups = 0;
     this.perfMaxDamageTexts = 0;
+    this.perfSeparationChecks = 0;
+    this.perfSeparationChecksThisFrame = 0;
+    this.perfMaxSeparationChecks = 0;
   }
 
   private setupPerformanceScenario(): void {
@@ -196,7 +205,7 @@ class MistwoodGame {
   private startRun = (): void => {
     // The run is gated on the same clean directional sprite set used by the
     // selector, so no low-resolution character can appear mid-transition.
-    if (!this.assets.isReady) return;
+    if (!this.assets.canStart(heroDefinition(this.player.heroId))) return;
     this.audio.startMusic();
     this.audio.setMode('gameplay');
     this.reset();
@@ -301,10 +310,16 @@ class MistwoodGame {
       maxLightnings: this.perfMaxLightnings,
       maxPickups: this.perfMaxPickups,
       maxDamageTexts: this.perfMaxDamageTexts,
+      separationChecks: this.perfSeparationChecks,
+      maxSeparationChecks: this.perfMaxSeparationChecks,
+      assetSelectionLoadMs: this.assets.loadingState.selectionLoadMs,
+      assetGameplayLoadMs: this.assets.loadingState.gameplayLoadMs,
+      assetTotalLoadMs: this.assets.loadingState.totalLoadMs,
     };
   }
 
   private update(dt: number): void {
+    this.perfSeparationChecksThisFrame = 0;
     this.elapsed += dt;
     this.player.invulnerable = Math.max(0, this.player.invulnerable - dt);
     this.player.hitFlash = Math.max(0, this.player.hitFlash - dt);
@@ -366,6 +381,19 @@ class MistwoodGame {
   }
 
   private updateEnemies(dt: number): void {
+    const cellSize = 96;
+    this.enemySpatialGrid.clear();
+    if (this.perfSeparationOptimized) {
+      for (const enemy of this.enemies) {
+        if (enemy.dead) continue;
+        const cellX = Math.floor(enemy.x / cellSize);
+        const cellY = Math.floor(enemy.y / cellSize);
+        const key = cellX * 4096 + cellY;
+        const bucket = this.enemySpatialGrid.get(key);
+        if (bucket) bucket.push(enemy);
+        else this.enemySpatialGrid.set(key, [enemy]);
+      }
+    }
     for (const enemy of this.enemies) {
       if (enemy.dead) continue;
       enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
@@ -386,17 +414,45 @@ class MistwoodGame {
       const obstacle = this.world.obstacleSteer({ x: enemy.x, y: enemy.y }, enemy.radius);
       let separationX = 0;
       let separationY = 0;
-      for (const other of this.enemies) {
-        if (other === enemy || other.dead) continue;
-        const dx = enemy.x - other.x;
-        const dy = enemy.y - other.y;
-        const distanceSq = dx * dx + dy * dy;
-        const desired = enemy.radius + other.radius + 8;
-        if (distanceSq > 0.01 && distanceSq < desired * desired) {
-          const distance = Math.sqrt(distanceSq);
-          const force = (desired - distance) / desired;
-          separationX += (dx / distance) * force;
-          separationY += (dy / distance) * force;
+      if (this.perfSeparationOptimized) {
+        const cellX = Math.floor(enemy.x / cellSize);
+        const cellY = Math.floor(enemy.y / cellSize);
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+            const bucket = this.enemySpatialGrid.get((cellX + offsetX) * 4096 + (cellY + offsetY));
+            if (!bucket) continue;
+            for (const other of bucket) {
+              if (other === enemy || other.dead) continue;
+              this.perfSeparationChecks += 1;
+              this.perfSeparationChecksThisFrame += 1;
+              const dx = enemy.x - other.x;
+              const dy = enemy.y - other.y;
+              const distanceSq = dx * dx + dy * dy;
+              const desired = enemy.radius + other.radius + 8;
+              if (distanceSq > 0.01 && distanceSq < desired * desired) {
+                const distance = Math.sqrt(distanceSq);
+                const force = (desired - distance) / desired;
+                separationX += (dx / distance) * force;
+                separationY += (dy / distance) * force;
+              }
+            }
+          }
+        }
+      } else {
+        for (const other of this.enemies) {
+          if (other === enemy || other.dead) continue;
+          this.perfSeparationChecks += 1;
+          this.perfSeparationChecksThisFrame += 1;
+          const dx = enemy.x - other.x;
+          const dy = enemy.y - other.y;
+          const distanceSq = dx * dx + dy * dy;
+          const desired = enemy.radius + other.radius + 8;
+          if (distanceSq > 0.01 && distanceSq < desired * desired) {
+            const distance = Math.sqrt(distanceSq);
+            const force = (desired - distance) / desired;
+            separationX += (dx / distance) * force;
+            separationY += (dy / distance) * force;
+          }
         }
       }
       const desired = normalize(direction.x + obstacle.x * 1.7 + separationX * 1.2, direction.y + obstacle.y * 1.7 + separationY * 1.2);
@@ -455,6 +511,7 @@ class MistwoodGame {
         while (this.player.xp >= this.player.xpToNext) {
           this.player.xp -= this.player.xpToNext;
           this.player.level += 1;
+          applyLevelGrowth(this.stats, this.player);
           this.player.xpToNext = Math.ceil(5 + this.player.level * 1.2);
           this.pendingLevelUps += 1;
         }
@@ -671,6 +728,7 @@ class MistwoodGame {
   private selectUpgrade(index: number): void {
     if (this.state !== 'LEVEL_UP' || !this.cards[index]) return;
     applyUpgrade(this.stats, this.cards[index]);
+    if (this.cards[index].skillId === 'vitality') this.player.hp = this.player.maxHp + this.stats.maxHpBonus;
     this.ui.triggerSelectionFlash();
     this.audio.select();
     this.cards = [];
@@ -712,6 +770,7 @@ class MistwoodGame {
     if (!this.debug) return;
     if (key === 'l' && this.state === 'PLAYING') {
       this.player.level += 1;
+      applyLevelGrowth(this.stats, this.player);
       this.pendingLevelUps += 1;
       this.openLevelUp();
     } else if (key === 'h') this.player.hp = this.player.maxHp + this.stats.maxHpBonus;
@@ -758,7 +817,7 @@ class MistwoodGame {
     }
     this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug, heroDefinition(this.player.heroId).name, this.player.facing16);
     if (this.state !== 'CHARACTER_SELECT') this.ui.drawJoystick(ctx, (drawContext) => this.input.drawJoystick(drawContext));
-    if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady);
+    if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.canStart(heroDefinition(this.player.heroId)));
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);
     if (this.state === 'GAME_OVER') this.ui.drawGameOver(ctx, this.player, this.elapsed);
     if (this.debug) {
@@ -783,6 +842,7 @@ class MistwoodGame {
       this.perfMaxLightnings = Math.max(this.perfMaxLightnings, this.lightnings.length);
       this.perfMaxPickups = Math.max(this.perfMaxPickups, this.pickups.length);
       this.perfMaxDamageTexts = Math.max(this.perfMaxDamageTexts, this.texts.length);
+      this.perfMaxSeparationChecks = Math.max(this.perfMaxSeparationChecks, this.perfSeparationChecksThisFrame);
       const snapshot = this.performanceSnapshot();
       (window as Window & { __mistwoodPerf?: PerformanceSnapshot }).__mistwoodPerf = snapshot;
       if (this.perfElement) {
@@ -912,26 +972,26 @@ bootWindow.__mistwoodBootStarted = true;
 const syncLoadingUi = (): void => {
   if (!loading) return;
   const state = game.assetLoadingState();
-  if (!state.complete) {
-    const percentage = Math.round((state.loaded / Math.max(1, state.total)) * 100);
+  if (!state.selectionReady) {
+    const percentage = Math.round((state.selectionLoaded / Math.max(1, HEROES.length)) * 100);
     if (loadingTitle) loadingTitle.textContent = '正在喚醒霧林…';
-    if (loadingDetail) loadingDetail.textContent = `正在載入遊戲素材 ${state.loaded} / ${state.total}（${percentage}%）`;
+    if (loadingDetail) loadingDetail.textContent = `正在準備角色秘典 ${state.selectionLoaded} / ${HEROES.length}（${percentage}%）`;
     if (loadingFill) {
       loadingFill.classList.remove('indeterminate');
       loadingFill.style.width = `${Math.max(7, percentage)}%`;
     }
+    if (state.selectionLoaded >= HEROES.length && state.selectionFailed > 0) {
+      if (loadingTitle) loadingTitle.textContent = '角色素材載入失敗';
+      if (loadingDetail) loadingDetail.textContent = '請檢查網路或重新整理頁面後再試';
+      if (loadingFill) loadingFill.classList.add('indeterminate');
+      loadingReload?.classList.add('visible');
+      return;
+    }
     window.requestAnimationFrame(syncLoadingUi);
     return;
   }
-  if (!state.ready || state.failed > 0) {
-    if (loadingTitle) loadingTitle.textContent = '霧林素材載入失敗';
-    if (loadingDetail) loadingDetail.textContent = `已完成 ${state.loaded} / ${state.total}，請檢查網路後重試`;
-    if (loadingFill) loadingFill.classList.add('indeterminate');
-    loadingReload?.classList.add('visible');
-    return;
-  }
   if (loadingTitle) loadingTitle.textContent = '霧林已甦醒';
-  if (loadingDetail) loadingDetail.textContent = '正在進入角色選擇';
+  if (loadingDetail) loadingDetail.textContent = '正在進入角色選擇，秘術素材將在背景完成';
   if (loadingFill) loadingFill.style.width = '100%';
   loading.style.opacity = '0';
   window.setTimeout(() => loading.remove(), 320);

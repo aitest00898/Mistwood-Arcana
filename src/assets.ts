@@ -12,8 +12,8 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '閃電 · 以太 · 軌道魔法',
     palette: ['#172d63', '#f7f2df', '#bd9250', '#43e8ff'],
     masterArt: 'characters/aether-mage-master.png',
-    selectionArt: 'characters/selection/aether-mage.png',
-    directionalAtlas: 'characters/aether-mage/directional-atlas.png',
+    selectionArt: 'characters/selection/aether-mage.webp',
+    directionalAtlas: 'characters/aether-mage/directional-atlas.webp',
     spriteIndex: 0,
   },
   {
@@ -25,8 +25,8 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '祝福 · 輻光 · 聖擊',
     palette: ['#f7f3e4', '#6b84c7', '#c9a150', '#8ce9ff'],
     masterArt: 'characters/holy-spellblade-master.png',
-    selectionArt: 'characters/selection/holy-spellblade.png',
-    directionalAtlas: 'characters/holy-spellblade/directional-atlas.png',
+    selectionArt: 'characters/selection/holy-spellblade.webp',
+    directionalAtlas: 'characters/holy-spellblade/directional-atlas.webp',
     spriteIndex: 1,
   },
   {
@@ -38,8 +38,8 @@ export const HEROES: HeroDefinition[] = [
     magicTheme: '森靈 · 旋風 · 幽霧',
     palette: ['#1e493b', '#282923', '#8b6942', '#88c9a0'],
     masterArt: 'characters/mistwood-ranger-master.png',
-    selectionArt: 'characters/selection/mistwood-ranger.png',
-    directionalAtlas: 'characters/mistwood-ranger/directional-atlas.png',
+    selectionArt: 'characters/selection/mistwood-ranger.webp',
+    directionalAtlas: 'characters/mistwood-ranger/directional-atlas.webp',
     spriteIndex: 2,
   },
 ];
@@ -70,6 +70,21 @@ export const enemyDefinition = (id: EnemyKind): EnemyDefinition => enemyMap.get(
 
 const IMAGE_LOAD_TIMEOUT_MS = 15000;
 
+export interface AssetLoadingState {
+  loaded: number;
+  selectionLoaded: number;
+  total: number;
+  failed: number;
+  complete: boolean;
+  ready: boolean;
+  selectionReady: boolean;
+  selectionFailed: number;
+  startReady: boolean;
+  selectionLoadMs: number;
+  gameplayLoadMs: number;
+  totalLoadMs: number;
+}
+
 const loadImage = (src: string): Promise<HTMLImageElement | null> => new Promise((resolve) => {
   const image = new Image();
   let settled = false;
@@ -88,54 +103,91 @@ const loadImage = (src: string): Promise<HTMLImageElement | null> => new Promise
 
 export class ArtAssets {
   readonly ready: Promise<void>;
+  readonly selectionReady: Promise<void>;
+  readonly gameplayReady: Promise<void>;
   private enemyAtlas: HTMLImageElement | null = null;
   private readonly directionalAtlases = new Map<HeroId, HTMLImageElement>();
   private readonly selectionArts = new Map<HeroId, HTMLImageElement>();
   private readonly loadingTotal = HEROES.length * 2 + 1;
   private loadingFinished = 0;
   private loadingFailures = 0;
+  private selectionFinished = 0;
+  private selectionFailures = 0;
   private loadingComplete = false;
+  private selectionComplete = false;
+  private gameplayComplete = false;
+  private readonly loadStartedAt = performance.now();
+  private selectionLoadMs = 0;
+  private gameplayLoadMs = 0;
+  private totalLoadMs = 0;
 
   constructor() {
-    const track = (src: string): Promise<HTMLImageElement | null> => loadImage(src).then((image) => {
+    const track = (src: string, phase: 'selection' | 'gameplay'): Promise<HTMLImageElement | null> => loadImage(src).then((image) => {
       this.loadingFinished += 1;
       if (!image) this.loadingFailures += 1;
+      if (phase === 'selection') {
+        this.selectionFinished += 1;
+        if (!image) this.selectionFailures += 1;
+      }
       return image;
     });
-    this.ready = Promise.all([
-      track('enemies/enemy-atlas.png'),
-      ...HEROES.map((hero) => track(hero.directionalAtlas)),
-      ...HEROES.map((hero) => track(hero.selectionArt)),
-    ]).then((images) => {
-      this.enemyAtlas = images[0];
+    this.selectionReady = Promise.all(HEROES.map((hero) => track(hero.selectionArt, 'selection'))).then((images) => {
       HEROES.forEach((hero, index) => {
-        const directionalAtlas = images[1 + index];
-        if (directionalAtlas) this.directionalAtlases.set(hero.id, directionalAtlas);
-        const selectionArt = images[1 + HEROES.length + index];
+        const selectionArt = images[index];
         if (selectionArt) this.selectionArts.set(hero.id, selectionArt);
       });
-    }).finally(() => {
+      this.selectionLoadMs = performance.now() - this.loadStartedAt;
+      this.selectionComplete = true;
+    });
+    this.gameplayReady = this.selectionReady.then(() => {
+      const gameplayStartedAt = performance.now();
+      const enemyPromise = track('enemies/enemy-atlas.webp', 'gameplay').then((image) => {
+        this.enemyAtlas = image;
+      });
+      const heroPromises = HEROES.map((hero) => track(hero.directionalAtlas, 'gameplay').then((image) => {
+        if (image) this.directionalAtlases.set(hero.id, image);
+      }));
+      return Promise.all([enemyPromise, ...heroPromises]).then(() => undefined).finally(() => {
+        this.gameplayLoadMs = performance.now() - gameplayStartedAt;
+        this.gameplayComplete = true;
+      });
+    });
+    this.ready = this.gameplayReady.finally(() => {
+      this.totalLoadMs = performance.now() - this.loadStartedAt;
       this.loadingComplete = true;
     });
   }
 
   get isReady(): boolean {
-    return Boolean(this.enemyAtlas && this.directionalAtlases.size === HEROES.length && this.selectionArts.size === HEROES.length);
+    return Boolean(this.gameplayComplete && this.enemyAtlas && this.directionalAtlases.size === HEROES.length && this.selectionArts.size === HEROES.length);
   }
 
-  get loadingState(): { loaded: number; total: number; failed: number; complete: boolean; ready: boolean } {
+  get isSelectionAssetsReady(): boolean { return this.selectionComplete && this.selectionArts.size === HEROES.length; }
+  get isGameplayReady(): boolean { return this.gameplayComplete && Boolean(this.enemyAtlas) && this.directionalAtlases.size === HEROES.length; }
+  canStart(hero: HeroDefinition): boolean { return Boolean(this.enemyAtlas && this.directionalAtlases.get(hero.id) && this.isSelectionAssetsReady); }
+
+  get loadingState(): AssetLoadingState {
     return {
       loaded: this.loadingFinished,
+      selectionLoaded: this.selectionFinished,
       total: this.loadingTotal,
       failed: this.loadingFailures,
       complete: this.loadingComplete,
       ready: this.isReady,
+      selectionReady: this.isSelectionAssetsReady,
+      selectionFailed: this.selectionFailures,
+      startReady: Boolean(this.enemyAtlas && this.directionalAtlases.get(HEROES[0].id) && this.isSelectionAssetsReady),
+      selectionLoadMs: this.selectionLoadMs,
+      gameplayLoadMs: this.gameplayLoadMs,
+      totalLoadMs: this.totalLoadMs,
     };
   }
 
   isHeroReady(hero: HeroDefinition): boolean {
-    return Boolean(this.directionalAtlases.get(hero.id) && this.selectionArts.get(hero.id));
+    return Boolean(this.directionalAtlases.get(hero.id));
   }
+
+  isEnemyReady(): boolean { return Boolean(this.enemyAtlas); }
 
   isSelectionReady(hero: HeroDefinition): boolean {
     return Boolean(this.selectionArts.get(hero.id));

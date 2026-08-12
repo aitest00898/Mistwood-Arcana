@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v12-boot-recovery';
+const CACHE_NAME = 'mistwood-arcana-shell-v13-performance-assets';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,
@@ -6,14 +6,14 @@ const APP_SHELL = [
   new URL('pwa/icon.svg', APP_BASE).href,
   new URL('pwa/icon-192.png', APP_BASE).href,
   new URL('pwa/icon-512.png', APP_BASE).href,
-  new URL('assets/forest-atmosphere.png', APP_BASE).href,
-  new URL('assets/characters/aether-mage/directional-atlas.png', APP_BASE).href,
-  new URL('assets/characters/holy-spellblade/directional-atlas.png', APP_BASE).href,
-  new URL('assets/characters/mistwood-ranger/directional-atlas.png', APP_BASE).href,
-  new URL('assets/characters/selection/aether-mage.png', APP_BASE).href,
-  new URL('assets/characters/selection/holy-spellblade.png', APP_BASE).href,
-  new URL('assets/characters/selection/mistwood-ranger.png', APP_BASE).href,
-  new URL('assets/enemies/enemy-atlas.png', APP_BASE).href,
+  new URL('assets/forest-atmosphere.webp', APP_BASE).href,
+  new URL('assets/characters/aether-mage/directional-atlas.webp', APP_BASE).href,
+  new URL('assets/characters/holy-spellblade/directional-atlas.webp', APP_BASE).href,
+  new URL('assets/characters/mistwood-ranger/directional-atlas.webp', APP_BASE).href,
+  new URL('assets/characters/selection/aether-mage.webp', APP_BASE).href,
+  new URL('assets/characters/selection/holy-spellblade.webp', APP_BASE).href,
+  new URL('assets/characters/selection/mistwood-ranger.webp', APP_BASE).href,
+  new URL('assets/enemies/enemy-atlas.webp', APP_BASE).href,
 ];
 
 self.addEventListener('install', (event) => {

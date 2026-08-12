@@ -8,7 +8,7 @@
 - Vite preview, 390 × 844 portrait viewport.
 - Three runs per mode; each run measured 150 animation frames after a 900ms asset warm-up.
 - Fixed stress scene: 78 live enemies, 5 orbs, 7-link chains, 35 maximum simultaneous lightning segments, particles, and floating damage numbers.
-- Baseline URL: `?debug=1&perf=stress&legacyWorld=1&legacyLightning=1`
+- Baseline URL: `?debug=1&perf=stress&legacyWorld=1&legacyLightning=1&legacySeparation=1`
 - Optimized URL: `?debug=1&perf=stress`
 - Values below are medians across the three runs. Times are JavaScript callback/render costs, not a claim about the browser's presentation refresh rate.
 
@@ -38,3 +38,20 @@
 5. The main lightning path is reused for the same 22ms flicker tick, matching the previous path seed and animation cadence. Branch lightning continues to rebuild every draw so its original per-frame movement and visual character remain intact.
 
 The `legacyWorld` and `legacyLightning` switches are benchmark-only fallbacks; they are not enabled in normal play.
+
+## 2026-08-12 loading and separation follow-up
+
+The production runtime now loads the three high-resolution selection images first, exposes the character-select screen as soon as that phase completes, and loads the enemy atlas plus the selected hero's directional atlas in the background. The remaining directional atlases do not block entering a run. Runtime PNG art was converted to WebP: the forest atmosphere fell from 2.53 MB to 0.31 MB, the enemy atlas from 1.46 MB to 0.36 MB, and the seven hero atlases from 4.11 MB to 0.73 MB combined.
+
+The separation loop has an explicit `legacySeparation=1` A/B switch and now uses a 96px spatial grid in normal play. The debug performance snapshot reports `separationChecks`, `maxSeparationChecks`, and the three asset load durations so mobile regressions can be measured from the deployed page rather than inferred from source alone.
+
+Isolated local stress samples at 78 enemies (same code path, one browser tab at a time) recorded:
+
+| Metric | Legacy full scan | Spatial grid | Change |
+| --- | ---: | ---: | ---: |
+| Separation checks | 906,906 | 183,652 | 79.8% fewer |
+| Maximum checks/frame | 6,006 | 1,524 | 74.6% fewer |
+| Average full frame | 1.052 ms | 1.052 ms | within run variance |
+| P95 full frame | 1.7 ms | 1.6 ms | slightly lower |
+
+The scene stayed below 20ms for all sampled frames. Asset timing in that run was approximately 28–34ms for selection art and 14–16ms for gameplay WebP assets after local cache warm-up; the first uncached mobile load is the reason the visible boot stage now reports selection progress separately.

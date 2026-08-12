@@ -18,7 +18,7 @@ export type EnemyKind =
   | 'abyssGargoyle'
   | 'ancientGroveGuardian';
 export type PickupColor = 'cyan' | 'green' | 'yellow' | 'red';
-export type SkillId = 'lightning' | 'blessing' | 'ray' | 'vortex' | 'embrace' | 'blade';
+export type SkillId = 'lightning' | 'blessing' | 'ray' | 'vortex' | 'embrace' | 'blade' | 'vitality' | 'fortitude';
 export type AttackId =
   | 'lightning'
   | 'eclipseArc'
@@ -215,6 +215,11 @@ export interface PerformanceSnapshot {
   maxLightnings: number;
   maxPickups: number;
   maxDamageTexts: number;
+  separationChecks: number;
+  maxSeparationChecks: number;
+  assetSelectionLoadMs: number;
+  assetGameplayLoadMs: number;
+  assetTotalLoadMs: number;
 }
 
 export interface Rock {

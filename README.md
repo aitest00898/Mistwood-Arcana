@@ -27,7 +27,7 @@ npm run preview
 
 Keyboard controls: WASD / arrow keys to move, `1`–`3` to choose upgrade cards, `R` to restart after defeat. On mobile, touch-drag anywhere on the game surface to move; a short tap is reserved for UI selection. Add `?debug=1` to expose a small verification helper: `L` opens an upgrade, `H` heals, `E` spawns a test wave, `X` spawns all enemy species, `U` equips an 8-attack mixed stress loadout, `I` equips the first 8 attacks at rank 5, and `K` shows the defeat flow.
 
-The gameplay background includes an original generated painterly forest atmosphere asset at `public/assets/forest-atmosphere.png`; all characters, enemies, icons, VFX, UI, SFX, and ambient music are drawn or synthesized locally. The PWA shell is defined by `public/manifest.webmanifest` and `public/sw.js`.
+The gameplay background includes an original generated painterly forest atmosphere asset at `public/assets/forest-atmosphere.webp`; all characters, enemies, icons, VFX, UI, SFX, and ambient music are drawn or synthesized locally. Runtime art is served as WebP while the source PNGs remain available for regeneration. The PWA shell is defined by `public/manifest.webmanifest` and `public/sw.js`.
 
 The current combat expansion is documented in [`docs/combat-expansion.md`](docs/combat-expansion.md). It includes 15 data-driven attacks in addition to the starting lightning orb, a maximum of 8 equipped attacks, adaptive visible-viewport upgrade cards, bounded WebAudio buses, and high-resolution selection art separate from 16-direction gameplay atlases.
 

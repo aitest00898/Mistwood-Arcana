@@ -13,7 +13,8 @@
 
 `scripts/prepare-hero-16.mjs` 會去除連通的白色背景、裁切單一方向、統一落地錨點，
 並在每位英雄的 `runtime/` 產生 16 張獨立 PNG 與 4×4 的
-`directional-atlas.png`。瀏覽器只載入 `public/assets/characters/<hero>/directional-atlas.png`，
+`directional-atlas.png` 會保留在來源／再生成目錄；瀏覽器載入壓縮後的
+`public/assets/characters/<hero>/directional-atlas.webp`，
 不會在遊戲中直接載入整張概念板。
 
 方向槽位使用 `d00`–`d15`：`d00` 是朝向鏡頭／畫面下方，之後以順時針每 22.5° 遞增。
@@ -35,19 +36,21 @@
 選角畫面與 gameplay 使用兩條不同的資產管線：
 
 - `characters/source/hero-selection-reference.jpg`：高解析三英雄選角原始板，保留作為可追溯的設計來源。
-- `public/assets/characters/selection/aether-mage.png`：艾爾登高解析選角圖。
-- `public/assets/characters/selection/holy-spellblade.png`：莉亞娜高解析選角圖。
-- `public/assets/characters/selection/mistwood-ranger.png`：薇爾娜高解析選角圖。
+- `public/assets/characters/selection/aether-mage.webp`：艾爾登高解析選角圖 runtime 版本。
+- `public/assets/characters/selection/holy-spellblade.webp`：莉亞娜高解析選角圖 runtime 版本。
+- `public/assets/characters/selection/mistwood-ranger.webp`：薇爾娜高解析選角圖 runtime 版本。
 
-選角圖由 `scripts/prepare-selection-art.mjs` 以固定裁切區域、白底連通區去背、邊緣去暈與透明裁切產生；選角畫面只在 preload 階段載入這三張圖，不會把低解析 16-direction tile 放大充當主視覺。重新處理資產時執行 `npm run prepare:selection-art`，並確認輸出仍為 RGBA PNG、角色四肢／武器未被裁切。
+選角圖由 `scripts/prepare-selection-art.mjs` 以固定裁切區域、白底連通區去背、邊緣去暈與透明裁切產生；選角畫面只在 preload 階段載入這三張圖，不會把低解析 16-direction tile 放大充當主視覺。重新處理資產時執行 `npm run prepare:selection-art`，再執行 `npm run prepare:runtime-webp` 產生瀏覽器版本，並確認角色四肢／武器未被裁切。
 
 新增英雄時，請同時加入 `src/types.ts` 的 `HeroDefinition.selectionArt`、`src/assets.ts` 的 preload 與 `public/sw.js` 的 cache 清單；gameplay atlas 與 selection art 不可互相替換。
 
 Runtime asset loader 位於 `src/assets.ts`。它只在載入時建立 `Image`，遊戲迴圈從 atlas 取樣；高解析 master 不會被每幀載入。若重新生成，必須維持 manifest 中的英雄順序、敵人 atlas 順序、透明去背驗證與 silhouette 規則。
 
+載入分成兩個階段：先載入三張選角圖，讓玩家不必等待整包戰鬥素材就能看到選角畫面；進入遊戲所需的敵人 atlas 與目前英雄方向 atlas 會在背景完成，其餘方向 atlas 不阻塞選角。`public/sw.js` 只快取 WebP runtime 素材，PNG 保留作為可再生成來源。
+
 ## Raster / vector assets
 
-- `bitmaps/forest-atmosphere.png`：森林地表與光影氛圍背景。
+- `bitmaps/forest-atmosphere.png`：森林地表與光影氛圍背景來源；瀏覽器使用 `public/assets/forest-atmosphere.webp`。
 - `icons/icon.svg`：PWA 圖示向量原稿。
 - `icons/icon-192.svg`、`icons/icon-512.svg`：向量安裝圖示版本。
 - `icons/icon-192.png`、`icons/icon-512.png`：iOS / Android 安裝圖示。
