@@ -1,16 +1,27 @@
 import { COLORS, FONT } from './config';
-import type { Enemy, EnemyKind, OrbPosition, Particle, Player, Pickup } from './types';
+import { ArtAssets, enemyDefinition, heroDefinition } from './assets';
+import type { Enemy, EnemyKind, OrbPosition, Particle, Player, Pickup, HeroId } from './types';
 import { drawGlow, drawSoftEllipse, hexToRgba, lerp, polygonPath, seededRandom } from './utils';
 
-const ENEMY_PALETTE: Record<EnemyKind, { body: string; light: string; dark: string; cap: string }> = {
-  blue: { body: '#2d86be', light: '#75d9e7', dark: '#123f69', cap: '#4dbce4' },
-  green: { body: '#32956e', light: '#7bdb9a', dark: '#164e47', cap: '#45b383' },
-  yellow: { body: '#c69a46', light: '#f2d888', dark: '#69462c', cap: '#e7b957' },
-  red: { body: '#c74768', light: '#f28a8c', dark: '#5d233e', cap: '#e36372' },
-  violet: { body: '#7952ad', light: '#c395e6', dark: '#33234d', cap: '#a26ac5' },
+const LEGACY_PALETTE: Record<string, { body: string; light: string; dark: string; cap: string }> = {
+  mistSlime: { body: '#3daec0', light: '#a7f7ee', dark: '#164c68', cap: '#70e5e7' },
+  sproutSlime: { body: '#5d9d47', light: '#bce47b', dark: '#244d38', cap: '#81bd59' },
+  redcapFunglet: { body: '#bd7651', light: '#f2b27b', dark: '#5d2e2b', cap: '#df655e' },
+  thornPuffer: { body: '#b94e37', light: '#f18a5e', dark: '#522331', cap: '#df6a47' },
+  rootling: { body: '#6a8d4e', light: '#a8c66b', dark: '#304833', cap: '#749b51' },
+  mossGolem: { body: '#596b6a', light: '#a2b48c', dark: '#263741', cap: '#759b70' },
+  nightWisp: { body: '#1b5a92', light: '#5fcbef', dark: '#101b46', cap: '#3e72b4' },
+  direMistwolf: { body: '#5c4b92', light: '#b68ce7', dark: '#251d42', cap: '#825bd1' },
+  goblinSpearscout: { body: '#6f9a52', light: '#b5cb74', dark: '#294733', cap: '#6a8051' },
+  goblinHexer: { body: '#477b78', light: '#8ecdc3', dark: '#1b3040', cap: '#285d70' },
+  carnivorousBloom: { body: '#5b9d52', light: '#e1835f', dark: '#23402d', cap: '#d35a57' },
+  boneWarden: { body: '#c6c4a7', light: '#fff2ca', dark: '#4e4a4c', cap: '#8b6c50' },
+  paleForestGhost: { body: '#a7e8ee', light: '#f3ffff', dark: '#486b8b', cap: '#bcecff' },
+  abyssGargoyle: { body: '#563f76', light: '#b65dd1', dark: '#241c3d', cap: '#9347bf' },
+  ancientGroveGuardian: { body: '#687c58', light: '#b6c983', dark: '#283d35', cap: '#6a9a69' },
 };
 
-export const makePlayer = (x: number, y: number): Player => ({
+export const makePlayer = (x: number, y: number, heroId: HeroId = 'aether-mage'): Player => ({
   x,
   y,
   vx: 0,
@@ -27,12 +38,13 @@ export const makePlayer = (x: number, y: number): Player => ({
   invulnerable: 0,
   kills: 0,
   orbitAngle: -Math.PI / 2,
+  heroId,
 });
 
 export const makeEnemy = (id: number, x: number, y: number, kind: EnemyKind, difficulty: number): Enemy => {
-  const base = kind === 'violet' ? 110 : kind === 'yellow' ? 56 : kind === 'red' ? 38 : kind === 'green' ? 34 : 30;
-  const radius = (kind === 'violet' ? 24 : 18 + Math.random() * 4) * (0.92 + Math.random() * 0.18);
-  const hp = base * (1 + difficulty * 0.11);
+  const definition = enemyDefinition(kind);
+  const radius = definition.radius * (0.94 + Math.random() * 0.12);
+  const hp = 30 * definition.hpMultiplier * (1 + difficulty * 0.11);
   return {
     id,
     x,
@@ -42,7 +54,7 @@ export const makeEnemy = (id: number, x: number, y: number, kind: EnemyKind, dif
     radius,
     hp,
     maxHp: hp,
-    speed: (kind === 'blue' ? 58 : kind === 'red' ? 68 : kind === 'violet' ? 45 : 62) * (0.95 + Math.random() * 0.16) * (1 + difficulty * 0.012),
+    speed: 64 * definition.speedMultiplier * (0.95 + Math.random() * 0.16) * (1 + difficulty * 0.012),
     kind,
     phase: Math.random() * Math.PI * 2,
     hitFlash: 0,
@@ -54,7 +66,12 @@ export const makeEnemy = (id: number, x: number, y: number, kind: EnemyKind, dif
   };
 };
 
-export const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, time: number): void => {
+export const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, time: number, assets?: ArtAssets): void => {
+  if (assets?.isReady) {
+    drawSoftEllipse(ctx, player.x + 5, player.y + 17, 24, 8, '#071b1f', 0.62);
+    assets.drawHeroSprite(ctx, heroDefinition(player.heroId), player, time);
+    return;
+  }
   const bob = Math.sin(time * 0.004 + player.bob) * 2.1;
   const sway = Math.sin(time * 0.0032 + player.bob * 2) * 0.8;
   ctx.save();
@@ -122,44 +139,72 @@ export const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, time: 
 
 export const drawOrb = (ctx: CanvasRenderingContext2D, orb: OrbPosition, time: number): void => {
   const pulse = 1 + Math.sin(time * 0.009 + orb.pulse) * 0.08;
-  const radius = 12.5 * pulse;
+  const radius = 11.5 * pulse;
+  const phase = time * 0.002 + orb.pulse;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  drawGlow(ctx, orb.x, orb.y, 42 * pulse, COLORS.electric, 1);
+  drawGlow(ctx, orb.x, orb.y, 44 * pulse, COLORS.electric, 0.92);
   ctx.translate(orb.x, orb.y);
-  ctx.rotate(time * 0.0012 + orb.pulse);
-  ctx.fillStyle = '#75f1ff';
-  ctx.globalAlpha = 0.95;
-  for (let i = 0; i < 4; i += 1) {
-    const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 4;
-    const tip = 25 * pulse;
-    const base = 9.5 * pulse;
-    const width = 5.2 * pulse;
+  ctx.rotate(phase);
+  ctx.strokeStyle = 'rgba(131, 242, 255, .85)';
+  ctx.lineWidth = 1.15;
+  ctx.beginPath();
+  ctx.arc(0, 0, 19 * pulse, 0.2, Math.PI * 1.62);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(237, 255, 248, .66)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(0, 0, 16 * pulse, Math.PI * 1.1, Math.PI * 2.65);
+  ctx.stroke();
+  ctx.fillStyle = '#8ef8ff';
+  for (let i = 0; i < 8; i += 1) {
+    const angle = (Math.PI * 2 * i) / 8 + Math.sin(phase * 1.8 + i) * 0.09;
+    const inner = 14 * pulse;
+    const outer = (20 + (i % 3) * 4) * pulse;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(angle) * base + Math.cos(angle + Math.PI / 2) * width, Math.sin(angle) * base + Math.sin(angle + Math.PI / 2) * width);
-    ctx.lineTo(Math.cos(angle) * tip, Math.sin(angle) * tip);
-    ctx.lineTo(Math.cos(angle) * base + Math.cos(angle - Math.PI / 2) * width, Math.sin(angle) * base + Math.sin(angle - Math.PI / 2) * width);
+    ctx.moveTo(Math.cos(angle - 0.11) * inner, Math.sin(angle - 0.11) * inner);
+    ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+    ctx.lineTo(Math.cos(angle + 0.11) * inner, Math.sin(angle + 0.11) * inner);
     ctx.closePath();
+    ctx.globalAlpha = 0.46 + (i % 3) * 0.16;
     ctx.fill();
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#0a4db4';
+  ctx.fillStyle = '#0b4ca8';
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#c5fbff';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#c7ffff';
+  ctx.lineWidth = 1.8;
   ctx.stroke();
   ctx.fillStyle = '#072a77';
   ctx.beginPath();
-  ctx.arc(-2, -2, radius * 0.58, 0, Math.PI * 2);
+  ctx.moveTo(0, -radius * 0.7);
+  ctx.lineTo(radius * 0.56, radius * 0.48);
+  ctx.lineTo(-radius * 0.56, radius * 0.48);
+  ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = '#bdfaff';
+  ctx.beginPath();
+  ctx.arc(-2.2, -3, 2.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#d7ad61';
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.arc(0, 0, 14.6, -0.45, 0.38);
+  ctx.stroke();
   ctx.restore();
 };
 
-export const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy, time: number): void => {
-  const palette = ENEMY_PALETTE[enemy.kind];
+export const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy, time: number, assets?: ArtAssets): void => {
+  if (assets?.isReady) {
+    const definition = enemyDefinition(enemy.kind);
+    drawSoftEllipse(ctx, enemy.x + 4, enemy.y + enemy.radius * 0.84, enemy.radius * definition.shadowScale, enemy.radius * definition.shadowScale * 0.32, '#061914', definition.elite ? 0.7 : 0.58);
+    assets.drawEnemySprite(ctx, definition, enemy.x, enemy.y, enemy.radius, enemy.phase, time, enemy.hitFlash);
+    return;
+  }
+  const palette = LEGACY_PALETTE[enemy.kind] ?? LEGACY_PALETTE.mistSlime;
   const breathe = 1 + Math.sin(time * 0.004 + enemy.phase) * 0.045;
   const bounce = Math.abs(Math.sin(time * 0.006 + enemy.phase)) * 1.9;
   const squash = 1 - Math.abs(Math.sin(time * 0.006 + enemy.phase)) * 0.04;
@@ -185,7 +230,7 @@ export const drawEnemy = (ctx: CanvasRenderingContext2D, enemy: Enemy, time: num
   ctx.fillStyle = body;
   ctx.fill();
   ctx.stroke();
-  if (enemy.kind !== 'blue') {
+  if (enemy.kind !== 'mistSlime' && enemy.kind !== 'nightWisp' && enemy.kind !== 'paleForestGhost') {
     ctx.fillStyle = palette.cap;
     ctx.strokeStyle = palette.dark;
     ctx.beginPath();

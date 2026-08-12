@@ -1,5 +1,6 @@
 import { COLORS, FONT, GAME_HEIGHT, GAME_WIDTH, MONO_FONT, RARITY_COLORS } from './config';
-import type { GameState, OrbPosition, Player, Rarity, Stats, UpgradeCard } from './types';
+import type { GameState, HeroDefinition, OrbPosition, Player, Rarity, Stats, UpgradeCard } from './types';
+import type { ArtAssets } from './assets';
 import { drawSkillGlyph } from './entities';
 import { clamp, drawGlow, hexToRgba, polygonPath, roundRectPath } from './utils';
 import { skillLevel } from './upgrades';
@@ -8,6 +9,8 @@ export interface UiCallbacks {
   onMute: () => void;
   onUpgrade: (index: number) => void;
   onRestart: () => void;
+  onHeroSelect: (index: number) => void;
+  onStartRun: () => void;
 }
 
 export class GameUI {
@@ -15,6 +18,7 @@ export class GameUI {
   private cardAnimation = 0;
   private selectionFlash = 0;
   private hoveredCard = -1;
+  private hoveredHero = 0;
 
   constructor(callbacks: UiCallbacks) {
     this.callbacks = callbacks;
@@ -28,6 +32,10 @@ export class GameUI {
     this.hoveredCard = index;
   }
 
+  setHoveredHero(index: number): void {
+    this.hoveredHero = index;
+  }
+
   triggerSelectionFlash(): void {
     this.selectionFlash = 1;
   }
@@ -37,16 +45,74 @@ export class GameUI {
     this.selectionFlash = Math.max(0, this.selectionFlash - dt * 5);
   }
 
-  drawHud(ctx: CanvasRenderingContext2D, state: GameState, player: Player, stats: Stats, orbPositions: OrbPosition[], elapsed: number, muted: boolean, debug: boolean): void {
-    this.drawXpBar(ctx, player);
-    this.drawStatusBar(ctx, player, stats);
-    this.drawSkillNetwork(ctx, stats, orbPositions);
-    this.drawMuteButton(ctx, muted);
+  drawHud(ctx: CanvasRenderingContext2D, state: GameState, player: Player, stats: Stats, orbPositions: OrbPosition[], elapsed: number, muted: boolean, debug: boolean, heroName = '安妮妮'): void {
+    if (state === 'PLAYING' || state === 'LEVEL_UP' || state === 'GAME_OVER') {
+      this.drawXpBar(ctx, player);
+      this.drawStatusBar(ctx, player, stats, heroName);
+      this.drawSkillNetwork(ctx, stats, orbPositions);
+      this.drawMuteButton(ctx, muted);
+    }
     if (debug) this.drawDebug(ctx, player, stats);
   }
 
   drawJoystick(ctx: CanvasRenderingContext2D, inputDraw: (ctx: CanvasRenderingContext2D) => void): void {
     inputDraw(ctx);
+  }
+
+  drawCharacterSelect(ctx: CanvasRenderingContext2D, heroes: HeroDefinition[], selected: number, assets: ArtAssets, elapsed: number, ready: boolean): void {
+    const hero = heroes[selected] ?? heroes[0];
+    ctx.save();
+    ctx.fillStyle = 'rgba(2, 7, 10, .84)';
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    const halo = ctx.createRadialGradient(GAME_WIDTH / 2, 255, 12, GAME_WIDTH / 2, 255, 280);
+    halo.addColorStop(0, `${hero.palette[3]}26`);
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f5ebd6';
+    ctx.font = `700 28px ${FONT}`;
+    ctx.shadowColor = 'rgba(118,239,255,.45)';
+    ctx.shadowBlur = 18;
+    ctx.fillText('選擇角色', GAME_WIDTH / 2, 58);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(229,216,187,.7)';
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText('霧林秘典 · MISTWOOD ARCANA', GAME_WIDTH / 2, 84);
+    roundRectPath(ctx, 74, 102, 364, 378, 18);
+    ctx.fillStyle = 'rgba(11, 21, 25, .76)';
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(hero.palette[2], 0.72);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.strokeStyle = hexToRgba(hero.palette[3], 0.22);
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    assets.drawHeroMaster(ctx, hero, GAME_WIDTH / 2, 294, 300, 352, 0.96);
+    ctx.fillStyle = '#fff5df';
+    ctx.font = `700 23px ${FONT}`;
+    ctx.fillText(hero.name, GAME_WIDTH / 2, 430);
+    ctx.fillStyle = hero.palette[3];
+    ctx.font = `600 13px ${FONT}`;
+    ctx.fillText(hero.role, GAME_WIDTH / 2, 452);
+    ctx.fillStyle = '#c9d8d2';
+    ctx.font = `11px ${FONT}`;
+    this.drawWrappedText(ctx, hero.description, GAME_WIDTH / 2, 473, 290, 17, 2);
+    heroes.forEach((item, index) => this.drawHeroSelector(ctx, item, index, selected, elapsed));
+    roundRectPath(ctx, 164, 648, 184, 48, 16);
+    ctx.fillStyle = ready ? hexToRgba(hero.palette[3], 0.22) : 'rgba(74,86,82,.32)';
+    ctx.fill();
+    ctx.strokeStyle = ready ? hexToRgba(hero.palette[3], 0.9) : 'rgba(188,202,193,.42)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = ready ? '#f3fff7' : '#a9b7b1';
+    ctx.font = `700 16px ${FONT}`;
+    ctx.fillText(ready ? '踏入霧林' : '正在準備秘術…', GAME_WIDTH / 2, 672);
+    ctx.fillStyle = 'rgba(221,238,230,.58)';
+    ctx.font = `10px ${MONO_FONT}`;
+    ctx.fillText('1 / 2 / 3 選擇 · ENTER 開始', GAME_WIDTH / 2, 710);
+    ctx.restore();
   }
 
   drawLevelUp(ctx: CanvasRenderingContext2D, cards: UpgradeCard[], elapsed: number): void {
@@ -111,6 +177,16 @@ export class GameUI {
     return boxes.findIndex((box) => pointX >= box.x && pointX <= box.x + box.w);
   }
 
+  hitTestHero(pointX: number, pointY: number): number {
+    if (pointY < 510 || pointY > 630) return -1;
+    const centers = [136, 256, 376];
+    return centers.findIndex((center) => Math.abs(pointX - center) < 52);
+  }
+
+  hitStart(pointX: number, pointY: number): boolean {
+    return pointX >= 150 && pointX <= 362 && pointY >= 638 && pointY <= 704;
+  }
+
   hitMute(pointX: number, pointY: number): boolean {
     return Math.hypot(pointX - 483, pointY - 667) < 24;
   }
@@ -132,6 +208,30 @@ export class GameUI {
     ctx.fillText(`生存等級 ${level}`, 256, 40);
   }
 
+  private drawHeroSelector(ctx: CanvasRenderingContext2D, hero: HeroDefinition, index: number, selected: number, elapsed: number): void {
+    const x = 136 + index * 120;
+    const active = index === selected;
+    const pulse = active ? 1 + Math.sin(elapsed * 3.2) * 0.04 : 1;
+    ctx.save();
+    ctx.translate(x, 558);
+    ctx.scale(pulse, pulse);
+    ctx.beginPath();
+    ctx.arc(0, 0, active ? 42 : 36, 0, Math.PI * 2);
+    ctx.fillStyle = active ? hexToRgba(hero.palette[3], 0.18) : 'rgba(8,15,17,.78)';
+    ctx.fill();
+    ctx.strokeStyle = active ? hero.palette[3] : hexToRgba(hero.palette[2], 0.66);
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.stroke();
+    ctx.fillStyle = '#f2f3e5';
+    ctx.font = `700 12px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(String(index + 1), 0, 4);
+    ctx.fillStyle = active ? '#fff6df' : '#b4c5bc';
+    ctx.font = `600 10px ${FONT}`;
+    ctx.fillText(hero.name, 0, 59);
+    ctx.restore();
+  }
+
   private drawXpBar(ctx: CanvasRenderingContext2D, player: Player): void {
     const x = 145;
     const y = 625;
@@ -144,7 +244,7 @@ export class GameUI {
     ctx.fill();
   }
 
-  private drawStatusBar(ctx: CanvasRenderingContext2D, player: Player, stats: Stats): void {
+  private drawStatusBar(ctx: CanvasRenderingContext2D, player: Player, stats: Stats, heroName: string): void {
     const x = 140;
     const y = 639;
     const w = 232;
@@ -171,7 +271,7 @@ export class GameUI {
     ctx.fillStyle = '#fff4dd';
     ctx.shadowColor = '#311a14';
     ctx.shadowBlur = 2;
-    ctx.fillText('安妮妮', x + 66, y + h / 2 + 0.3);
+    ctx.fillText(heroName, x + 66, y + h / 2 + 0.3);
     ctx.fillStyle = '#ffe2b5';
     ctx.fillText(`Lv.${player.level}`, x + w - 42, y + h / 2 + 0.3);
     ctx.shadowBlur = 0;

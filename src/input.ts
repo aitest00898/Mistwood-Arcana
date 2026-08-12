@@ -85,7 +85,7 @@ export class InputManager {
 
   private handleKeyDown = (event: KeyboardEvent): void => {
     const key = event.key.toLowerCase();
-    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', '1', '2', '3', 'l', 'h', 'e', 'k', 'r'].includes(key)) {
+    if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'enter', '1', '2', '3', 'l', 'h', 'e', 'x', 'k', 'r'].includes(key)) {
       event.preventDefault();
     }
     this.keys.add(key);
@@ -101,7 +101,9 @@ export class InputManager {
     event.preventDefault();
     this.onInteract?.();
     const point = this.pointFromEvent(event);
-    if (point.x < 160 && point.y > 565) {
+    // Keep the character selector's left card tappable; gameplay joystick
+    // still occupies the lower-left safe area beneath it.
+    if (point.x < 160 && point.y > 610) {
       this.pointerId = event.pointerId;
       this.joystickActive = true;
       this.updateJoystick(point);

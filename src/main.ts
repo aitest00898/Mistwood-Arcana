@@ -1,5 +1,6 @@
 import './styles.css';
 import { AudioEngine } from './audio';
+import { ArtAssets, ENEMIES, HEROES, enemyDefinition, heroDefinition } from './assets';
 import { GAME_HEIGHT, GAME_WIDTH, MAX_ENEMIES, MONO_FONT, PLAYER_RADIUS, PLAYER_SPEED, WORLD_HEIGHT, WORLD_WIDTH } from './config';
 import { drawEnemy, drawOrb, drawParticle, drawPickup, drawPlayer, makeEnemy, makePlayer } from './entities';
 import { InputManager } from './input';
@@ -17,9 +18,10 @@ class MistwoodGame {
   private readonly input: InputManager;
   private readonly audio: AudioEngine;
   private readonly ui: GameUI;
+  private readonly assets: ArtAssets;
   private player: Player;
   private stats: Stats;
-  private state: GameState = 'PLAYING';
+  private state: GameState = 'CHARACTER_SELECT';
   private enemies: Enemy[] = [];
   private pickups: Pickup[] = [];
   private particles: Particle[] = [];
@@ -34,6 +36,7 @@ class MistwoodGame {
   private ambientTimer = 0;
   private nextEnemyId = 1;
   private pendingLevelUps = 0;
+  private selectedHeroIndex = 0;
   private readonly debug = new URLSearchParams(window.location.search).has('debug');
 
   constructor(canvas: HTMLCanvasElement) {
@@ -44,12 +47,15 @@ class MistwoodGame {
     this.world = new World();
     this.input = new InputManager(canvas);
     this.audio = new AudioEngine();
+    this.assets = new ArtAssets();
     this.ui = new GameUI({
       onMute: () => this.audio.toggle(),
       onUpgrade: (index) => this.selectUpgrade(index),
       onRestart: () => this.reset(),
+      onHeroSelect: (index) => this.selectHero(index),
+      onStartRun: () => this.startRun(),
     });
-    this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, HEROES[0].id);
     this.stats = initialStats();
     this.input.onPoint = (point) => this.handlePoint(point);
     this.input.onKey = (key) => this.handleKey(key);
@@ -59,7 +65,6 @@ class MistwoodGame {
     window.visualViewport?.addEventListener('scroll', this.resize);
     window.addEventListener('blur', () => this.input.keys.clear());
     this.resize();
-    this.reset();
   }
 
   start(): void {
@@ -68,7 +73,7 @@ class MistwoodGame {
 
   private reset = (): void => {
     this.state = 'PLAYING';
-    this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    this.player = makePlayer(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, HEROES[this.selectedHeroIndex].id);
     this.stats = initialStats();
     this.enemies = [];
     this.pickups = [];
@@ -84,6 +89,20 @@ class MistwoodGame {
     this.nextEnemyId = 1;
     this.camera = { x: this.player.x - GAME_WIDTH / 2, y: this.player.y - GAME_HEIGHT / 2 };
     for (let i = 0; i < 10; i += 1) this.spawnEnemy(true);
+  };
+
+  private startRun = (): void => {
+    if (!this.assets.isReady || this.assets.masterCount !== HEROES.length) return;
+    this.audio.startMusic();
+    this.reset();
+  };
+
+  private selectHero = (index: number): void => {
+    if (index < 0 || index >= HEROES.length) return;
+    this.selectedHeroIndex = index;
+    this.player.heroId = HEROES[index].id;
+    this.ui.setHoveredHero(index);
+    this.audio.startMusic();
   };
 
   private resize = (): void => {
@@ -354,17 +373,18 @@ class MistwoodGame {
     if (enemy.dead) return;
     enemy.dead = true;
     this.player.kills += 1;
-    const color = enemy.kind === 'blue' ? 'cyan' : enemy.kind === 'green' ? 'green' : enemy.kind === 'yellow' ? 'yellow' : 'red';
-    const value = enemy.kind === 'violet' ? 3 : enemy.kind === 'yellow' ? 2 : 1;
+    const definition = enemyDefinition(enemy.kind);
+    const color = definition.pickupColor;
+    const value = definition.elite ? 5 : definition.hpMultiplier > 2 ? 3 : definition.hpMultiplier > 1.2 ? 2 : 1;
     this.pickups.push({ x: enemy.x, y: enemy.y, vx: randomRange(-12, 12), vy: randomRange(-18, -3), value, color, phase: Math.random() * 10, life: 24, collected: false });
     this.spawnBurst(enemy.x, enemy.y, '#f4ffff', 10, 'poof');
     this.spawnBurst(enemy.x, enemy.y + 5, '#14252b', 2, 'shadow');
     this.audio.death();
   }
 
-  private spawnEnemy(initial: boolean): void {
+  private spawnEnemy(initial: boolean, kindOverride?: Enemy['kind'], distanceOverride?: number): void {
     const angle = Math.random() * Math.PI * 2;
-    const distance = initial ? randomRange(220, 350) : randomRange(360, 500);
+    const distance = distanceOverride ?? (initial ? randomRange(220, 350) : randomRange(360, 500));
     let x = this.player.x + Math.cos(angle) * distance;
     let y = this.player.y + Math.sin(angle) * distance;
     x = clamp(x, 70, WORLD_WIDTH - 70);
@@ -373,13 +393,23 @@ class MistwoodGame {
       x = clamp(this.player.x + Math.cos(angle + attempt * 0.7) * distance, 70, WORLD_WIDTH - 70);
       y = clamp(this.player.y + Math.sin(angle + attempt * 0.7) * distance, 70, WORLD_HEIGHT - 70);
     }
-    const roll = Math.random();
-    let kind: Enemy['kind'] = 'blue';
-    if (this.elapsed > 16 && roll > 0.83) kind = 'red';
-    else if (this.elapsed > 10 && roll > 0.66) kind = 'yellow';
-    else if (this.elapsed > 6 && roll > 0.47) kind = 'green';
-    if (this.elapsed > 32 && roll > 0.95) kind = 'violet';
+    const kind = kindOverride ?? this.rollEnemyKind();
     this.enemies.push(makeEnemy(this.nextEnemyId++, x, y, kind, this.elapsed / 30));
+  }
+
+  private rollEnemyKind(): Enemy['kind'] {
+    const phases: Array<{ minTime: number; ids: Enemy['kind'][] }> = [
+      { minTime: 0, ids: ['mistSlime', 'sproutSlime', 'redcapFunglet', 'thornPuffer'] },
+      { minTime: 6, ids: ['mistSlime', 'sproutSlime', 'redcapFunglet', 'thornPuffer', 'rootling', 'nightWisp', 'goblinSpearscout'] },
+      { minTime: 18, ids: ['mistSlime', 'redcapFunglet', 'rootling', 'nightWisp', 'goblinSpearscout', 'goblinHexer', 'boneWarden', 'paleForestGhost', 'direMistwolf'] },
+      { minTime: 34, ids: ['rootling', 'goblinHexer', 'boneWarden', 'paleForestGhost', 'direMistwolf', 'carnivorousBloom', 'mossGolem', 'abyssGargoyle', 'ancientGroveGuardian'] },
+    ];
+    const phase = phases.reduce((current, candidate) => (this.elapsed >= candidate.minTime ? candidate : current), phases[0]);
+    const weighted = phase.ids.flatMap((id) => {
+      const definition = enemyDefinition(id);
+      return Array.from({ length: Math.max(1, Math.round(definition.spawnWeight / 4)) }, () => id);
+    });
+    return weighted[Math.floor(Math.random() * weighted.length)] ?? 'mistSlime';
   }
 
   private enemyCap(): number {
@@ -461,6 +491,15 @@ class MistwoodGame {
   }
 
   private handlePoint(point: Vec2): void {
+    if (this.state === 'CHARACTER_SELECT') {
+      const hero = this.ui.hitTestHero(point.x, point.y);
+      if (hero >= 0) {
+        this.selectHero(hero);
+        return;
+      }
+      if (this.ui.hitStart(point.x, point.y)) this.startRun();
+      return;
+    }
     if (this.state === 'LEVEL_UP') {
       const card = this.ui.hitTestCard(point.x, point.y);
       if (card >= 0) this.selectUpgrade(card);
@@ -474,6 +513,11 @@ class MistwoodGame {
   }
 
   private handleKey(key: string): void {
+    if (this.state === 'CHARACTER_SELECT') {
+      if (key === '1' || key === '2' || key === '3') this.selectHero(Number(key) - 1);
+      if (key === 'enter' || key === ' ') this.startRun();
+      return;
+    }
     if (this.state === 'LEVEL_UP' && ['1', '2', '3'].includes(key)) this.selectUpgrade(Number(key) - 1);
     if (this.state === 'GAME_OVER' && key === 'r') this.reset();
     if (!this.debug) return;
@@ -483,6 +527,7 @@ class MistwoodGame {
       this.openLevelUp();
     } else if (key === 'h') this.player.hp = this.player.maxHp + this.stats.maxHpBonus;
     else if (key === 'e') for (let i = 0; i < 8; i += 1) this.spawnEnemy(false);
+    else if (key === 'x') ENEMIES.forEach((definition) => this.spawnEnemy(false, definition.id, 165));
     else if (key === 'k') this.state = 'GAME_OVER';
   }
 
@@ -493,19 +538,24 @@ class MistwoodGame {
     ctx.fillStyle = '#050f0e';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     const time = timestamp;
-    ctx.save();
-    ctx.translate(-this.camera.x, -this.camera.y);
-    this.world.draw(ctx, time);
-    for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
-    for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time);
-    drawPlayer(ctx, this.player, time);
-    for (const orb of this.getOrbPositions()) drawOrb(ctx, orb, time);
-    for (const particle of this.particles) drawParticle(ctx, particle);
-    for (const lightning of this.lightnings) this.drawLightning(ctx, lightning, time);
-    this.drawDamageTexts(ctx);
-    ctx.restore();
-    this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug);
-    this.ui.drawJoystick(ctx, (drawContext) => this.input.drawJoystick(drawContext));
+    if (this.state === 'CHARACTER_SELECT') {
+      this.world.draw(ctx, time);
+    } else {
+      ctx.save();
+      ctx.translate(-this.camera.x, -this.camera.y);
+      this.world.draw(ctx, time);
+      for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
+      for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time, this.assets);
+      drawPlayer(ctx, this.player, time, this.assets);
+      for (const orb of this.getOrbPositions()) drawOrb(ctx, orb, time);
+      for (const particle of this.particles) drawParticle(ctx, particle);
+      for (const lightning of this.lightnings) this.drawLightning(ctx, lightning, time);
+      this.drawDamageTexts(ctx);
+      ctx.restore();
+    }
+    this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug, heroDefinition(this.player.heroId).name);
+    if (this.state !== 'CHARACTER_SELECT') this.ui.drawJoystick(ctx, (drawContext) => this.input.drawJoystick(drawContext));
+    if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady && this.assets.masterCount === HEROES.length);
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);
     if (this.state === 'GAME_OVER') this.ui.drawGameOver(ctx, this.player, this.elapsed);
   }

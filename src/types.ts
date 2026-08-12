@@ -1,5 +1,21 @@
-export type GameState = 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER';
-export type EnemyKind = 'blue' | 'green' | 'yellow' | 'red' | 'violet';
+export type GameState = 'CHARACTER_SELECT' | 'PLAYING' | 'LEVEL_UP' | 'GAME_OVER';
+export type HeroId = 'aether-mage' | 'holy-spellblade' | 'mistwood-ranger';
+export type EnemyKind =
+  | 'mistSlime'
+  | 'sproutSlime'
+  | 'redcapFunglet'
+  | 'thornPuffer'
+  | 'rootling'
+  | 'mossGolem'
+  | 'nightWisp'
+  | 'direMistwolf'
+  | 'goblinSpearscout'
+  | 'goblinHexer'
+  | 'carnivorousBloom'
+  | 'boneWarden'
+  | 'paleForestGhost'
+  | 'abyssGargoyle'
+  | 'ancientGroveGuardian';
 export type PickupColor = 'cyan' | 'green' | 'yellow' | 'red';
 export type SkillId = 'lightning' | 'blessing' | 'ray' | 'vortex' | 'embrace' | 'blade';
 export type Rarity = '垃圾' | '普通' | '罕見!' | '史詩!!' | '傳說!!!';
@@ -26,6 +42,7 @@ export interface Player {
   invulnerable: number;
   kills: number;
   orbitAngle: number;
+  heroId: HeroId;
 }
 
 export interface Stats {
@@ -65,6 +82,32 @@ export interface Enemy {
   dead: boolean;
   dotTimer: number;
   dotTick: number;
+}
+
+export interface HeroDefinition {
+  id: HeroId;
+  name: string;
+  role: string;
+  description: string;
+  weapon: string;
+  magicTheme: string;
+  palette: string[];
+  masterArt: string;
+  spriteIndex: number;
+}
+
+export interface EnemyDefinition {
+  id: EnemyKind;
+  name: string;
+  radius: number;
+  hpMultiplier: number;
+  speedMultiplier: number;
+  spawnWeight: number;
+  visualScale: number;
+  shadowScale: number;
+  elite: boolean;
+  atlasIndex: number;
+  pickupColor: PickupColor;
 }
 
 export interface Pickup {
