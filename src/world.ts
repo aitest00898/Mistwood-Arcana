@@ -1,4 +1,4 @@
-import { COLORS, WORLD_HEIGHT, WORLD_WIDTH } from './config';
+import { COLORS, GAME_HEIGHT, GAME_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from './config';
 import type { FlowerDetail, GrassDetail, Rock, TreeDetail, Vec2 } from './types';
 import { clamp, drawSoftEllipse, hexToRgba, seededRandom } from './utils';
 
@@ -10,13 +10,76 @@ export class World {
   readonly trees: TreeDetail[] = [];
   private readonly atmosphere = new Image();
   private atmosphereReady = false;
+  private readonly sortedRocks: Rock[] = [];
+  private readonly sortedTrees: TreeDetail[] = [];
+  private readonly rockPoints = new Map<Rock, Vec2[]>();
+  private readonly treeHighlights = new Map<TreeDetail, Array<{ x: number; y: number; radius: number }>>();
+  private backgroundCanvas: HTMLCanvasElement | null = null;
+  private readonly optimized = !new URLSearchParams(window.location.search).has('legacyWorld');
 
   constructor() {
     this.atmosphere.src = `${import.meta.env.BASE_URL}assets/forest-atmosphere.png`;
     this.atmosphere.onload = () => {
       this.atmosphereReady = true;
+      this.buildBackground();
     };
     this.generateDetails();
+    this.sortedRocks.push(...this.rocks.slice().sort((a, b) => a.y - b.y));
+    this.sortedTrees.push(...this.trees.sort((a, b) => a.y - b.y));
+    this.prepareStaticDetails();
+    this.buildBackground();
+  }
+
+  private prepareStaticDetails(): void {
+    for (const rock of this.rocks) {
+      const random = seededRandom(Math.floor(rock.seed * 1000));
+      const points: Vec2[] = [];
+      for (let i = 0; i < 8; i += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 8;
+        const radius = 0.82 + random() * 0.28;
+        points.push({ x: Math.cos(angle) * rock.width * radius, y: Math.sin(angle) * rock.height * radius });
+      }
+      this.rockPoints.set(rock, points);
+    }
+    for (const tree of this.trees) {
+      const random = seededRandom(Math.floor(tree.seed * 1000));
+      const highlights: Array<{ x: number; y: number; radius: number }> = [];
+      for (let layer = 0; layer < 3; layer += 1) {
+        const layerY = -tree.height * (0.25 + layer * 0.23);
+        const width = tree.width * (0.86 - layer * 0.15);
+        highlights.push({
+          x: -width * 0.25 + random() * width * 0.2,
+          y: layerY - tree.height * 0.05,
+          radius: 4 + random() * 3,
+        });
+      }
+      this.treeHighlights.set(tree, highlights);
+    }
+  }
+
+  private buildBackground(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = WORLD_WIDTH;
+    canvas.height = WORLD_HEIGHT;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.fillStyle = COLORS.deepForest;
+    context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    if (this.atmosphereReady) {
+      context.globalAlpha = 0.78;
+      context.drawImage(this.atmosphere, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      context.globalAlpha = 1;
+    } else {
+      const gradient = context.createLinearGradient(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      gradient.addColorStop(0, '#265a3d');
+      gradient.addColorStop(0.5, '#34704d');
+      gradient.addColorStop(1, '#123728');
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    }
+    this.drawPaintedTrails(context);
+    this.drawBoundaryShade(context);
+    this.backgroundCanvas = canvas;
   }
 
   private generateDetails(): void {
@@ -75,30 +138,45 @@ export class World {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D, time: number): void {
+  draw(ctx: CanvasRenderingContext2D, time: number, view = { left: 0, top: 0, right: GAME_WIDTH, bottom: GAME_HEIGHT }): void {
     ctx.save();
-    ctx.fillStyle = COLORS.deepForest;
-    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    if (this.atmosphereReady) {
-      ctx.globalAlpha = 0.78;
-      ctx.drawImage(this.atmosphere, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-      ctx.globalAlpha = 1;
+    const viewWidth = Math.max(1, view.right - view.left);
+    const viewHeight = Math.max(1, view.bottom - view.top);
+    if (this.optimized && this.backgroundCanvas) {
+      ctx.drawImage(this.backgroundCanvas, view.left, view.top, viewWidth, viewHeight, view.left, view.top, viewWidth, viewHeight);
     } else {
-      const gradient = ctx.createLinearGradient(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-      gradient.addColorStop(0, '#265a3d');
-      gradient.addColorStop(0.5, '#34704d');
-      gradient.addColorStop(1, '#123728');
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = COLORS.deepForest;
       ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      if (this.atmosphereReady) {
+        ctx.globalAlpha = 0.78;
+        ctx.drawImage(this.atmosphere, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+        ctx.globalAlpha = 1;
+      } else {
+        const gradient = ctx.createLinearGradient(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+        gradient.addColorStop(0, '#265a3d');
+        gradient.addColorStop(0.5, '#34704d');
+        gradient.addColorStop(1, '#123728');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      }
+      this.drawPaintedTrails(ctx);
+      this.drawBoundaryShade(ctx);
     }
-    this.drawPaintedTrails(ctx);
-    this.drawBoundaryShade(ctx);
-    this.drawGrass(ctx, time);
-    this.drawFlowers(ctx, time);
-    this.drawBerries(ctx, time);
-    this.drawTrees(ctx, time);
-    const sortedRocks = [...this.rocks].sort((a, b) => a.y - b.y);
-    for (const rock of sortedRocks) this.drawRock(ctx, rock, time);
+    // Only details that can influence the current camera rectangle are drawn.
+    // The complete world remains intact; this only avoids work outside the
+    // viewport and preserves the same painterly layers and animation.
+    const paddedView = this.optimized
+      ? { left: view.left - 16, top: view.top - 16, right: view.right + 16, bottom: view.bottom + 16 }
+      : { left: -Infinity, top: -Infinity, right: Infinity, bottom: Infinity };
+    this.drawGrass(ctx, time, paddedView);
+    this.drawFlowers(ctx, time, paddedView);
+    this.drawBerries(ctx, time, paddedView);
+    this.drawTrees(ctx, time, paddedView);
+    const rocks = this.optimized ? this.sortedRocks : [...this.rocks].sort((a, b) => a.y - b.y);
+    for (const rock of rocks) {
+      if (rock.y + rock.height < paddedView.top || rock.y - rock.height > paddedView.bottom) continue;
+      this.drawRock(ctx, rock, time);
+    }
     ctx.restore();
   }
 
@@ -144,10 +222,11 @@ export class World {
     ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
-  private drawGrass(ctx: CanvasRenderingContext2D, time: number): void {
+  private drawGrass(ctx: CanvasRenderingContext2D, time: number, view: { left: number; top: number; right: number; bottom: number }): void {
     ctx.save();
     ctx.lineWidth = 1.6;
     for (const tuft of this.grass) {
+      if (tuft.x < view.left || tuft.x > view.right || tuft.y < view.top || tuft.y > view.bottom) continue;
       const sway = Math.sin(time * 0.0012 + tuft.x * 0.01) * 1.3;
       const h = 8 * tuft.scale;
       ctx.strokeStyle = tuft.tint;
@@ -162,9 +241,10 @@ export class World {
     ctx.restore();
   }
 
-  private drawFlowers(ctx: CanvasRenderingContext2D, time: number): void {
+  private drawFlowers(ctx: CanvasRenderingContext2D, time: number, view: { left: number; top: number; right: number; bottom: number }): void {
     ctx.save();
     for (const flower of this.flowers) {
+      if (flower.x < view.left || flower.x > view.right || flower.y < view.top || flower.y > view.bottom) continue;
       const pulse = 0.85 + Math.sin(time * 0.002 + flower.x) * 0.08;
       ctx.globalAlpha = 0.7 * pulse;
       ctx.fillStyle = flower.color;
@@ -182,9 +262,10 @@ export class World {
     ctx.restore();
   }
 
-  private drawBerries(ctx: CanvasRenderingContext2D, time: number): void {
+  private drawBerries(ctx: CanvasRenderingContext2D, time: number, view: { left: number; top: number; right: number; bottom: number }): void {
     ctx.save();
     for (const berry of this.berries) {
+      if (berry.x < view.left || berry.x > view.right || berry.y < view.top || berry.y > view.bottom) continue;
       const alpha = 0.35 + (Math.sin(time * 0.001 + berry.x) + 1) * 0.1;
       ctx.globalAlpha = alpha;
       ctx.fillStyle = '#f05c68';
@@ -197,10 +278,12 @@ export class World {
     ctx.restore();
   }
 
-  private drawTrees(ctx: CanvasRenderingContext2D, time: number): void {
-    const sortedTrees = [...this.trees].sort((a, b) => a.y - b.y);
-    for (const tree of sortedTrees) {
-      const random = seededRandom(Math.floor(tree.seed * 1000));
+  private drawTrees(ctx: CanvasRenderingContext2D, time: number, view: { left: number; top: number; right: number; bottom: number }): void {
+    const trees = this.optimized ? this.sortedTrees : [...this.trees].sort((a, b) => a.y - b.y);
+    for (const tree of trees) {
+      if (this.optimized && (tree.x + tree.width < view.left || tree.x - tree.width > view.right || tree.y - tree.height > view.bottom || tree.y + 8 < view.top)) continue;
+      const highlights = this.optimized ? this.treeHighlights.get(tree) ?? [] : [];
+      const legacyRandom = this.optimized ? null : seededRandom(Math.floor(tree.seed * 1000));
       ctx.save();
       drawSoftEllipse(ctx, tree.x + 8, tree.y + 4, tree.width * 0.72, tree.width * 0.25, '#031914', 0.5);
       ctx.translate(tree.x, tree.y);
@@ -228,9 +311,16 @@ export class World {
         ctx.fill();
         ctx.stroke();
         ctx.globalAlpha = 0.24;
+        const highlight = highlights[layer];
         ctx.fillStyle = '#a4cb79';
         ctx.beginPath();
-        ctx.arc(-width * 0.25 + random() * width * 0.2, layerY - tree.height * 0.05, 4 + random() * 3, 0, Math.PI * 2);
+        ctx.arc(
+          highlight?.x ?? (-width * 0.25 + (legacyRandom?.() ?? 0) * width * 0.2),
+          highlight?.y ?? (layerY - tree.height * 0.05),
+          highlight?.radius ?? (4 + (legacyRandom?.() ?? 0) * 3),
+          0,
+          Math.PI * 2,
+        );
         ctx.fill();
         ctx.globalAlpha = 1;
       }
@@ -248,14 +338,7 @@ export class World {
   }
 
   private drawRock(ctx: CanvasRenderingContext2D, rock: Rock, time: number): void {
-    const random = seededRandom(Math.floor(rock.seed * 1000));
-    const points: Vec2[] = [];
-    const count = 8;
-    for (let i = 0; i < count; i += 1) {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / count;
-      const radius = 0.82 + random() * 0.28;
-      points.push({ x: Math.cos(angle) * rock.width * radius, y: Math.sin(angle) * rock.height * radius });
-    }
+    const points = this.optimized ? this.rockPoints.get(rock) ?? [] : this.legacyRockPoints(rock);
     ctx.save();
     drawSoftEllipse(ctx, rock.x + 10, rock.y + rock.height * 0.46, rock.width * 0.78, rock.height * 0.34, '#031915', 0.48);
     ctx.translate(rock.x, rock.y);
@@ -296,6 +379,17 @@ export class World {
     ctx.arc(rock.width * 0.2, -rock.height * 0.54, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
+
+  private legacyRockPoints(rock: Rock): Vec2[] {
+    const random = seededRandom(Math.floor(rock.seed * 1000));
+    const points: Vec2[] = [];
+    for (let i = 0; i < 8; i += 1) {
+      const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 8;
+      const radius = 0.82 + random() * 0.28;
+      points.push({ x: Math.cos(angle) * rock.width * radius, y: Math.sin(angle) * rock.height * radius });
+    }
+    return points;
   }
 
   resolveCircle(position: Vec2, radius: number): Vec2 {

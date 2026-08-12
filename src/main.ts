@@ -6,7 +6,7 @@ import { drawEnemy, drawOrb, drawParticle, drawPickup, drawPlayer, makeEnemy, ma
 import { InputManager } from './input';
 import { direction16FromVector } from './directions';
 import { applyUpgrade, initialStats, rollUpgradeCards } from './upgrades';
-import type { DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
+import type { DamageText, Enemy, GameState, LightningArc, OrbPosition, Particle, PerformanceSnapshot, Pickup, Player, Stats, UpgradeCard, Vec2 } from './types';
 import { GameUI } from './ui';
 import { World } from './world';
 import { clamp, distSq, hexToRgba, lerp, normalize, randomRange, seededRandom } from './utils';
@@ -39,6 +39,27 @@ class MistwoodGame {
   private pendingLevelUps = 0;
   private selectedHeroIndex = 0;
   private readonly debug = new URLSearchParams(window.location.search).has('debug');
+  private readonly perfEnabled = new URLSearchParams(window.location.search).has('perf');
+  private readonly perfStress = new URLSearchParams(window.location.search).get('perf') === 'stress';
+  private readonly perfLightningOptimized = !new URLSearchParams(window.location.search).has('legacyLightning');
+  private readonly perfFrames: number[] = [];
+  private perfFrameCount = 0;
+  private perfElapsedMs = 0;
+  private perfLastFrameMs = 0;
+  private perfMaxFrameMs = 0;
+  private perfUpdateMs = 0;
+  private perfRenderMs = 0;
+  private perfWorldMs = 0;
+  private perfLastTimestamp = 0;
+  private perfWallTimeMs = 0;
+  private perfMaxEnemies = 0;
+  private perfMaxParticles = 0;
+  private perfMaxLightnings = 0;
+  private perfMaxPickups = 0;
+  private perfMaxDamageTexts = 0;
+  private readonly perfElement: HTMLElement | null;
+  private orbPositions: OrbPosition[] = [];
+  private orbPositionsElapsed = -1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -49,6 +70,16 @@ class MistwoodGame {
     this.input = new InputManager(canvas);
     this.audio = new AudioEngine();
     this.assets = new ArtAssets();
+    if (this.perfEnabled) {
+      const element = document.getElementById('mistwood-perf-output');
+      if (element) {
+        element.hidden = false;
+        element.style.cssText = 'position:fixed;left:0;top:0;z-index:20;margin:0;padding:4px;background:rgba(0,0,0,.8);color:#bfffee;font:10px monospace;pointer-events:none;white-space:pre-wrap;';
+      }
+      this.perfElement = element;
+    } else {
+      this.perfElement = null;
+    }
     this.ui = new GameUI({
       onMute: () => this.audio.toggle(),
       onUpgrade: (index) => this.selectUpgrade(index),
@@ -88,9 +119,65 @@ class MistwoodGame {
     this.ambientTimer = 0;
     this.pendingLevelUps = 0;
     this.nextEnemyId = 1;
+    this.orbPositions = [];
+    this.orbPositionsElapsed = -1;
     this.camera = { x: this.player.x - GAME_WIDTH / 2, y: this.player.y - GAME_HEIGHT / 2 };
     for (let i = 0; i < 10; i += 1) this.spawnEnemy(true);
+    if (this.perfStress) this.setupPerformanceScenario();
+    this.resetPerformanceCounters();
   };
+
+  private resetPerformanceCounters(): void {
+    if (!this.perfEnabled) return;
+    this.perfFrames.length = 0;
+    this.perfFrameCount = 0;
+    this.perfElapsedMs = 0;
+    this.perfLastFrameMs = 0;
+    this.perfMaxFrameMs = 0;
+    this.perfUpdateMs = 0;
+    this.perfRenderMs = 0;
+    this.perfWorldMs = 0;
+    this.perfLastTimestamp = 0;
+    this.perfWallTimeMs = 0;
+    this.perfMaxEnemies = 0;
+    this.perfMaxParticles = 0;
+    this.perfMaxLightnings = 0;
+    this.perfMaxPickups = 0;
+    this.perfMaxDamageTexts = 0;
+  }
+
+  private setupPerformanceScenario(): void {
+    // Deterministic, opt-in benchmark load. This never runs in normal play and
+    // only keeps entities alive long enough to measure the full VFX workload.
+    this.player.invulnerable = 999;
+    this.stats.orbCount = 5;
+    this.stats.attackInterval = 0.5;
+    this.stats.attackRadius = 420;
+    this.stats.chainCount = 7;
+    this.stats.chainRange = 250;
+    this.stats.baseDamage = 0.18;
+    this.enemies = [];
+    this.nextEnemyId = 1;
+    for (let i = 0; i < MAX_ENEMIES; i += 1) {
+      const definition = ENEMIES[i % ENEMIES.length];
+      const angle = (Math.PI * 2 * i) / MAX_ENEMIES;
+      const distance = 145 + (i % 7) * 18;
+      const enemy = makeEnemy(
+        this.nextEnemyId++,
+        this.player.x + Math.cos(angle) * distance,
+        this.player.y + Math.sin(angle) * distance,
+        definition.id,
+        0,
+      );
+      enemy.radius = definition.radius;
+      enemy.phase = i * 0.37;
+      enemy.speed = 0;
+      enemy.hp = 100000;
+      enemy.maxHp = enemy.hp;
+      enemy.contactCooldown = 999;
+      this.enemies.push(enemy);
+    }
+  }
 
   private startRun = (): void => {
     // Full-body master art is loaded progressively; directional gameplay art is
@@ -130,11 +217,60 @@ class MistwoodGame {
     if (!this.lastTimestamp) this.lastTimestamp = timestamp;
     const dt = clamp((timestamp - this.lastTimestamp) / 1000, 0, 0.045);
     this.lastTimestamp = timestamp;
+    const frameStart = this.perfEnabled ? performance.now() : 0;
     this.ui.update(dt);
+    const updateStart = this.perfEnabled ? performance.now() : 0;
     if (this.state === 'PLAYING') this.update(dt);
+    if (this.perfEnabled) this.perfUpdateMs += performance.now() - updateStart;
+    const renderStart = this.perfEnabled ? performance.now() : 0;
     this.render(timestamp);
+    if (this.perfEnabled) {
+      this.perfRenderMs += performance.now() - renderStart;
+      const frameMs = performance.now() - frameStart;
+      this.perfLastFrameMs = frameMs;
+      this.perfMaxFrameMs = Math.max(this.perfMaxFrameMs, frameMs);
+      this.perfFrames.push(frameMs);
+      if (this.perfFrames.length > 1800) this.perfFrames.shift();
+      this.perfFrameCount += 1;
+      this.perfElapsedMs += frameMs;
+      if (this.perfLastTimestamp > 0) this.perfWallTimeMs += timestamp - this.perfLastTimestamp;
+      this.perfLastTimestamp = timestamp;
+    }
     requestAnimationFrame(this.frame);
   };
+
+  private performanceSnapshot(): PerformanceSnapshot {
+    const samples = [...this.perfFrames].sort((a, b) => a - b);
+    const percentile = (value: number): number => samples.length ? samples[Math.min(samples.length - 1, Math.floor((samples.length - 1) * value))] : 0;
+    return {
+      enabled: this.perfEnabled,
+      state: this.state,
+      gameTime: this.elapsed,
+      frames: this.perfFrameCount,
+      wallTimeMs: this.perfWallTimeMs,
+      elapsedMs: this.perfElapsedMs,
+      lastFrameMs: this.perfLastFrameMs,
+      maxFrameMs: this.perfMaxFrameMs,
+      updateMs: this.perfFrameCount ? this.perfUpdateMs / this.perfFrameCount : 0,
+      renderMs: this.perfFrameCount ? this.perfRenderMs / this.perfFrameCount : 0,
+      worldMs: this.perfFrameCount ? this.perfWorldMs / this.perfFrameCount : 0,
+      avgFrameMs: samples.length ? samples.reduce((sum, sample) => sum + sample, 0) / samples.length : 0,
+      p95FrameMs: percentile(0.95),
+      p99FrameMs: percentile(0.99),
+      longFrames20: samples.filter((sample) => sample > 20).length,
+      longFrames33: samples.filter((sample) => sample > 33).length,
+      enemies: this.enemies.length,
+      particles: this.particles.length,
+      lightnings: this.lightnings.length,
+      pickups: this.pickups.length,
+      damageTexts: this.texts.length,
+      maxEnemies: this.perfMaxEnemies,
+      maxParticles: this.perfMaxParticles,
+      maxLightnings: this.perfMaxLightnings,
+      maxPickups: this.perfMaxPickups,
+      maxDamageTexts: this.perfMaxDamageTexts,
+    };
+  }
 
   private update(dt: number): void {
     this.elapsed += dt;
@@ -423,6 +559,7 @@ class MistwoodGame {
   }
 
   private getOrbPositions(): OrbPosition[] {
+    if (this.orbPositionsElapsed === this.elapsed && this.orbPositions.length === this.stats.orbCount) return this.orbPositions;
     const positions: OrbPosition[] = [];
     for (let i = 0; i < this.stats.orbCount; i += 1) {
       const angle = this.player.orbitAngle + (Math.PI * 2 * i) / this.stats.orbCount;
@@ -433,6 +570,8 @@ class MistwoodGame {
         pulse: i * 1.6,
       });
     }
+    this.orbPositions = positions;
+    this.orbPositionsElapsed = this.elapsed;
     return positions;
   }
 
@@ -545,11 +684,15 @@ class MistwoodGame {
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     const time = timestamp;
     if (this.state === 'CHARACTER_SELECT') {
-      this.world.draw(ctx, time);
+      const worldStart = this.perfEnabled ? performance.now() : 0;
+      this.world.draw(ctx, time, { left: 0, top: 0, right: GAME_WIDTH, bottom: GAME_HEIGHT });
+      if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
     } else {
       ctx.save();
       ctx.translate(-this.camera.x, -this.camera.y);
-      this.world.draw(ctx, time);
+      const worldStart = this.perfEnabled ? performance.now() : 0;
+      this.world.draw(ctx, time, { left: this.camera.x, top: this.camera.y, right: this.camera.x + GAME_WIDTH, bottom: this.camera.y + GAME_HEIGHT });
+      if (this.perfEnabled) this.perfWorldMs += performance.now() - worldStart;
       for (const pickup of this.pickups) drawPickup(ctx, pickup, time);
       for (const enemy of this.enemies) if (!enemy.dead) drawEnemy(ctx, enemy, time, this.assets);
       drawPlayer(ctx, this.player, time, this.assets);
@@ -564,6 +707,18 @@ class MistwoodGame {
     if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady);
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);
     if (this.state === 'GAME_OVER') this.ui.drawGameOver(ctx, this.player, this.elapsed);
+    if (this.perfEnabled && this.perfFrameCount > 0 && this.perfFrameCount % 30 === 0) {
+      this.perfMaxEnemies = Math.max(this.perfMaxEnemies, this.enemies.length);
+      this.perfMaxParticles = Math.max(this.perfMaxParticles, this.particles.length);
+      this.perfMaxLightnings = Math.max(this.perfMaxLightnings, this.lightnings.length);
+      this.perfMaxPickups = Math.max(this.perfMaxPickups, this.pickups.length);
+      this.perfMaxDamageTexts = Math.max(this.perfMaxDamageTexts, this.texts.length);
+      const snapshot = this.performanceSnapshot();
+      (window as Window & { __mistwoodPerf?: PerformanceSnapshot }).__mistwoodPerf = snapshot;
+      if (this.perfElement) {
+        this.perfElement.textContent = JSON.stringify(snapshot, null, 2);
+      }
+    }
   }
 
   private drawDamageTexts(ctx: CanvasRenderingContext2D): void {
@@ -590,7 +745,17 @@ class MistwoodGame {
 
   private drawLightning(ctx: CanvasRenderingContext2D, lightning: LightningArc, time: number): void {
     const alpha = clamp(lightning.life / lightning.maxLife, 0, 1);
-    const points = this.jaggedPath(lightning.from, lightning.to, lightning.seed + Math.floor(time / 22) * 0.7);
+    const flickerTick = Math.floor(time / 22);
+    if (!this.perfLightningOptimized) {
+      lightning.path = undefined;
+      lightning.branchPath = undefined;
+    } else if (lightning.pathTick !== flickerTick || !lightning.path) {
+      lightning.pathTick = flickerTick;
+      lightning.path = this.jaggedPath(lightning.from, lightning.to, lightning.seed + flickerTick * 0.7);
+    }
+    const points = this.perfLightningOptimized
+      ? lightning.path ?? this.jaggedPath(lightning.from, lightning.to, lightning.seed + flickerTick * 0.7)
+      : this.jaggedPath(lightning.from, lightning.to, lightning.seed + flickerTick * 0.7);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
@@ -611,13 +776,12 @@ class MistwoodGame {
     ctx.lineWidth = 1.8;
     this.strokePath(ctx, points);
     if (lightning.branch) {
-      const mid = points[Math.floor(points.length * 0.55)];
-      const branchEnd = { x: mid.x + randomRange(-35, 35), y: mid.y + randomRange(20, 54) };
-      const branch = this.jaggedPath(mid, branchEnd, lightning.seed + 14);
       ctx.globalAlpha = alpha * 0.65;
       ctx.strokeStyle = '#8cefff';
       ctx.lineWidth = 2.2;
-      this.strokePath(ctx, branch);
+      const mid = points[Math.floor(points.length * 0.55)];
+      const branchEnd = { x: mid.x + randomRange(-35, 35), y: mid.y + randomRange(20, 54) };
+      this.strokePath(ctx, this.jaggedPath(mid, branchEnd, lightning.seed + 14));
     }
     drawFlash(ctx, lightning.from.x, lightning.from.y, 16, alpha * 0.65, '#7eeeff');
     drawFlash(ctx, lightning.to.x, lightning.to.y, 18, alpha * 0.85, '#f4ffff');
@@ -643,7 +807,11 @@ class MistwoodGame {
 
   private strokePath(ctx: CanvasRenderingContext2D, points: Vec2[]): void {
     ctx.beginPath();
-    points.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)));
+    for (let index = 0; index < points.length; index += 1) {
+      const point = points[index];
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    }
     ctx.stroke();
   }
 }

@@ -61,6 +61,13 @@ body {
   transition: opacity .3s ease;
 }
 
+#mistwood-perf-output {
+  max-width: min(100vw, 420px);
+  margin: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
 @media (min-width: 700px) {
   #game-shell {
     border-radius: 18px;

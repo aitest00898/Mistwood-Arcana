@@ -28,3 +28,19 @@ npm run preview
 Keyboard controls: WASD / arrow keys to move, `1`–`3` to choose upgrade cards, `R` to restart after defeat. Add `?debug=1` to expose a small verification helper: `L` opens an upgrade, `H` heals, `E` spawns a test wave, and `K` shows the defeat flow.
 
 The gameplay background includes an original generated painterly forest atmosphere asset at `public/assets/forest-atmosphere.png`; all characters, enemies, icons, VFX, UI, SFX, and ambient music are drawn or synthesized locally. The PWA shell is defined by `public/manifest.webmanifest` and `public/sw.js`.
+
+## Performance verification
+
+The normal game path keeps all gameplay, animation, particles, and electrical VFX enabled. An opt-in profiler is available for repeatable measurements:
+
+```text
+?debug=1&perf=stress
+```
+
+This creates a fixed stress scene with 78 live enemies, 5 lightning orbs, 7-link chains, particles, flashes, and floating damage text. The profiler output is only shown when `perf` is present. For an A/B comparison against the previous per-frame world and lightning paths, use:
+
+```text
+?debug=1&perf=stress&legacyWorld=1&legacyLightning=1
+```
+
+The full three-run baseline and optimized results are recorded in [`docs/performance-baseline.md`](docs/performance-baseline.md). The optimized world path pre-renders static terrain layers, reuses seeded static geometry, culls off-camera details, reuses orbital positions within a frame, and caches only the existing 22ms-tick main lightning path. The branch lightning keeps its original per-frame motion.

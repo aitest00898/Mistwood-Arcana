@@ -158,10 +158,42 @@ export interface LightningArc {
   maxLife: number;
   seed: number;
   branch: boolean;
+  pathTick?: number;
+  path?: Vec2[];
+  branchPath?: Vec2[];
 }
 
 export interface OrbPosition extends Vec2 {
   pulse: number;
+}
+
+export interface PerformanceSnapshot {
+  enabled: boolean;
+  state: GameState;
+  gameTime: number;
+  frames: number;
+  wallTimeMs: number;
+  elapsedMs: number;
+  lastFrameMs: number;
+  maxFrameMs: number;
+  updateMs: number;
+  renderMs: number;
+  worldMs: number;
+  avgFrameMs: number;
+  p95FrameMs: number;
+  p99FrameMs: number;
+  longFrames20: number;
+  longFrames33: number;
+  enemies: number;
+  particles: number;
+  lightnings: number;
+  pickups: number;
+  damageTexts: number;
+  maxEnemies: number;
+  maxParticles: number;
+  maxLightnings: number;
+  maxPickups: number;
+  maxDamageTexts: number;
 }
 
 export interface Rock {
