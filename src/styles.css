@@ -1,0 +1,74 @@
+:root {
+  color-scheme: dark;
+  background: #020706;
+  font-family: "Trebuchet MS", "PingFang TC", "Noto Sans TC", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #020706;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+#game-shell {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #081411;
+  box-shadow: 0 0 0 1px rgba(126, 214, 188, .12), 0 26px 80px rgba(0, 0, 0, .72);
+  aspect-ratio: 512 / 728;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  image-rendering: auto;
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(235, 255, 245, .82);
+  background: #0b3026;
+  letter-spacing: .16em;
+  font-size: 13px;
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+
+@media (min-width: 700px) {
+  #game-shell {
+    border-radius: 18px;
+  }
+}
+
+@media (display-mode: standalone) {
+  #game-shell {
+    box-shadow: 0 0 0 1px rgba(126, 214, 188, .15), 0 18px 60px rgba(0, 0, 0, .72);
+  }
+}
