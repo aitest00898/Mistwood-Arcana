@@ -11,8 +11,10 @@ export class InputManager {
   private pointerId: number | null = null;
   private joystickActive = false;
   private joystickVector: Vec2 = { x: 0, y: 0 };
-  private joystickBase: Vec2 = { x: 78, y: 648 };
-  private joystickThumb: Vec2 = { x: 78, y: 648 };
+  private joystickBase: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+  private joystickThumb: Vec2 = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+  private pointerDownPoint: Vec2 = { x: 0, y: 0 };
+  private pointerMoved = false;
   onPoint: InputPointHandler | null = null;
   onKey: KeyHandler | null = null;
   onInteract: (() => void) | null = null;
@@ -41,15 +43,16 @@ export class InputManager {
     if (this.keys.has('w') || this.keys.has('arrowup')) y -= 1;
     if (this.keys.has('s') || this.keys.has('arrowdown')) y += 1;
     const keyboard = normalize(x, y);
-    if (Math.hypot(this.joystickVector.x, this.joystickVector.y) > 0.05) return this.joystickVector;
+    if (this.joystickActive && Math.hypot(this.joystickVector.x, this.joystickVector.y) > 0.05) return this.joystickVector;
     return keyboard;
   }
 
   drawJoystick(ctx: CanvasRenderingContext2D): void {
+    if (!this.joystickActive) return;
     const base = this.joystickBase;
     const thumb = this.joystickThumb;
     ctx.save();
-    ctx.globalAlpha = this.joystickActive ? 0.82 : 0.56;
+    ctx.globalAlpha = 0.78;
     ctx.strokeStyle = '#e8f1ef';
     ctx.lineWidth = 1.3;
     ctx.fillStyle = 'rgba(4, 18, 19, .24)';
@@ -99,43 +102,57 @@ export class InputManager {
 
   private handlePointerDown = (event: PointerEvent): void => {
     event.preventDefault();
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (this.pointerId !== null) return;
     this.onInteract?.();
     const point = this.pointFromEvent(event);
-    // Keep the character selector's left card tappable; gameplay joystick
-    // still occupies the lower-left safe area beneath it.
-    if (point.x < 160 && point.y > 610) {
-      this.pointerId = event.pointerId;
-      this.joystickActive = true;
-      this.updateJoystick(point);
-      this.canvas.setPointerCapture(event.pointerId);
-      return;
-    }
-    this.onPoint?.(point);
+    // A touch starts a temporary joystick at the point where the finger lands.
+    // This makes the whole portrait screen a drag surface instead of reserving
+    // a fixed corner, while short taps still reach UI buttons on pointer-up.
+    this.pointerId = event.pointerId;
+    this.pointerDownPoint = point;
+    this.pointerMoved = false;
+    this.joystickBase = point;
+    this.joystickThumb = point;
+    this.joystickVector = { x: 0, y: 0 };
+    this.joystickActive = true;
+    this.canvas.setPointerCapture(event.pointerId);
   };
 
   private handlePointerMove = (event: PointerEvent): void => {
     if (!this.joystickActive || event.pointerId !== this.pointerId) return;
     event.preventDefault();
-    this.updateJoystick(this.pointFromEvent(event));
+    const point = this.pointFromEvent(event);
+    if (Math.hypot(point.x - this.pointerDownPoint.x, point.y - this.pointerDownPoint.y) > 10) this.pointerMoved = true;
+    this.updateJoystick(point);
   };
 
   private handlePointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== this.pointerId) return;
     event.preventDefault();
+    const point = this.pointFromEvent(event);
+    const isTap = !this.pointerMoved;
     this.pointerId = null;
     this.joystickActive = false;
     this.joystickVector = { x: 0, y: 0 };
-    this.joystickThumb = { ...this.joystickBase };
+    this.joystickBase = point;
+    this.joystickThumb = point;
+    if (isTap) this.onPoint?.(point);
   };
 
   private updateJoystick(point: Vec2): void {
     const dx = point.x - this.joystickBase.x;
     const dy = point.y - this.joystickBase.y;
     const length = Math.hypot(dx, dy);
-    const max = 34;
+    const max = 48;
     const ratio = length > max ? max / length : 1;
     this.joystickThumb = { x: this.joystickBase.x + dx * ratio, y: this.joystickBase.y + dy * ratio };
-    this.joystickVector = normalize(dx, dy);
-    if (length < 7) this.joystickVector = { x: 0, y: 0 };
+    if (length < 7) {
+      this.joystickVector = { x: 0, y: 0 };
+      return;
+    }
+    const strength = clamp(length / max, 0, 1);
+    const direction = normalize(dx, dy);
+    this.joystickVector = { x: direction.x * strength, y: direction.y * strength };
   }
 }

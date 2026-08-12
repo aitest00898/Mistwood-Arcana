@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mistwood-arcana-shell-v7-hero16';
+const CACHE_NAME = 'mistwood-arcana-shell-v8-mobile-drag';
 const APP_BASE = new URL('./', self.registration.scope).href;
 const APP_SHELL = [
   APP_BASE,

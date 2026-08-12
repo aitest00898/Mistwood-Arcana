@@ -80,11 +80,14 @@ export class ArtAssets {
   private readonly masters = new Map<HeroId, HTMLImageElement>();
 
   constructor() {
+    // Keep the playable shell independent from the large full-body illustrations.
+    // On mobile, waiting for three multi-megabyte master images made the selector
+    // look empty and kept the run button disabled even though gameplay atlases
+    // were already available.
     this.ready = Promise.all([
       loadImage('characters/hero-gameplay-atlas.png'),
       loadImage('enemies/enemy-atlas.png'),
       ...HEROES.map((hero) => loadImage(hero.directionalAtlas)),
-      ...HEROES.map((hero) => loadImage(hero.masterArt)),
     ]).then((images) => {
       const heroAtlas = images[0];
       const enemyAtlas = images[1];
@@ -92,8 +95,14 @@ export class ArtAssets {
       this.enemyAtlas = enemyAtlas;
       HEROES.forEach((hero, index) => {
         const directionalAtlas = images[2 + index];
-        const master = images[2 + HEROES.length + index];
         if (directionalAtlas) this.directionalAtlases.set(hero.id, directionalAtlas);
+      });
+    });
+
+    // Master art is presentation-only. It may arrive after the run is playable;
+    // the selector uses the directional atlas as a clean, consistent fallback.
+    HEROES.forEach((hero) => {
+      void loadImage(hero.masterArt).then((master) => {
         if (master) this.masters.set(hero.id, master);
       });
     });
@@ -162,13 +171,41 @@ export class ArtAssets {
 
   drawHeroMaster(ctx: CanvasRenderingContext2D, hero: HeroDefinition, x: number, y: number, width: number, height: number, alpha = 1): boolean {
     const image = this.masters.get(hero.id);
-    if (!image) return false;
-    const ratio = Math.min(width / image.width, height / image.height);
-    const drawWidth = image.width * ratio;
-    const drawHeight = image.height * ratio;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.drawImage(image, x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight);
+    if (image) {
+      const ratio = Math.min(width / image.width, height / image.height);
+      const drawWidth = image.width * ratio;
+      const drawHeight = image.height * ratio;
+      ctx.drawImage(image, x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight);
+      ctx.restore();
+      return true;
+    }
+
+    // The first directional view is a real gameplay sprite, not a placeholder.
+    // Showing it while the master art is downloading prevents a blank selector
+    // on slower mobile connections.
+    const directionalAtlas = this.directionalAtlases.get(hero.id);
+    if (!directionalAtlas) {
+      ctx.restore();
+      return false;
+    }
+    const cellWidth = directionalAtlas.width / 4;
+    const cellHeight = directionalAtlas.height / 4;
+    const ratio = Math.min(width / cellWidth, height / cellHeight);
+    const drawWidth = cellWidth * ratio;
+    const drawHeight = cellHeight * ratio;
+    ctx.drawImage(
+      directionalAtlas,
+      0,
+      0,
+      cellWidth,
+      cellHeight,
+      x - drawWidth / 2,
+      y - drawHeight / 2,
+      drawWidth,
+      drawHeight,
+    );
     ctx.restore();
     return true;
   }

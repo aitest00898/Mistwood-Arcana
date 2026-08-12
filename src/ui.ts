@@ -112,7 +112,7 @@ export class GameUI {
     ctx.fillText(ready ? '踏入霧林' : '正在準備秘術…', GAME_WIDTH / 2, 672);
     ctx.fillStyle = 'rgba(221,238,230,.58)';
     ctx.font = `10px ${MONO_FONT}`;
-    ctx.fillText('1 / 2 / 3 選擇 · ENTER 開始', GAME_WIDTH / 2, 710);
+    ctx.fillText('點擊「踏入霧林」開始 · 1 / 2 / 3 選角色', GAME_WIDTH / 2, 710);
     ctx.restore();
   }
 

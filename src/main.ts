@@ -93,7 +93,9 @@ class MistwoodGame {
   };
 
   private startRun = (): void => {
-    if (!this.assets.isReady || this.assets.masterCount !== HEROES.length) return;
+    // Full-body master art is loaded progressively; directional gameplay art is
+    // the only asset gate required to begin a run.
+    if (!this.assets.isReady) return;
     this.audio.startMusic();
     this.reset();
   };
@@ -559,7 +561,7 @@ class MistwoodGame {
     }
     this.ui.drawHud(ctx, this.state, this.player, this.stats, this.getOrbPositions(), this.elapsed, this.audio.isMuted, this.debug, heroDefinition(this.player.heroId).name, this.player.facing16);
     if (this.state !== 'CHARACTER_SELECT') this.ui.drawJoystick(ctx, (drawContext) => this.input.drawJoystick(drawContext));
-    if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady && this.assets.masterCount === HEROES.length);
+    if (this.state === 'CHARACTER_SELECT') this.ui.drawCharacterSelect(ctx, HEROES, this.selectedHeroIndex, this.assets, this.elapsed, this.assets.isReady);
     if (this.state === 'LEVEL_UP') this.ui.drawLevelUp(ctx, this.cards, this.elapsed);
     if (this.state === 'GAME_OVER') this.ui.drawGameOver(ctx, this.player, this.elapsed);
   }
